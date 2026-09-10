@@ -24,11 +24,6 @@ on:
 
   # ----------------------------------------------------------
   # MANUAL MODE
-  #
-  # GitHub:
-  # Actions → Cloud OpenCode → Run workflow
-  #
-  # Then write whatever you want OpenCode to do.
   # ----------------------------------------------------------
   workflow_dispatch:
     inputs:
@@ -58,33 +53,18 @@ on:
 
   # ----------------------------------------------------------
   # /oc COMMENTS
-  #
-  # You can write:
-  #
-  # /oc fix the authentication bug
-  #
-  # in an Issue or PR.
   # ----------------------------------------------------------
   issue_comment:
     types: [created]
 
   # ----------------------------------------------------------
   # /oc ON SPECIFIC PR CODE
-  #
-  # Go to:
-  # PR → Files changed → comment on a line
-  #
-  # Example:
-  #
-  # /oc fix this
   # ----------------------------------------------------------
   pull_request_review_comment:
     types: [created]
 
   # ----------------------------------------------------------
   # AUTOMATIC PR REVIEW
-  #
-  # Runs when a PR is opened/reopened/updated.
   # ----------------------------------------------------------
   pull_request:
     types:
@@ -95,10 +75,6 @@ on:
 
   # ----------------------------------------------------------
   # CODE DOCTOR
-  #
-  # Runs every Monday at 09:00 UTC.
-  #
-  # Change/remove this if you don't want automatic runs.
   # ----------------------------------------------------------
   schedule:
     - cron: "0 9 * * 1"
@@ -126,46 +102,31 @@ jobs:
 
     name: 🧠 OpenCode Manual
 
-    # Only run this job for the manual button.
     if: github.event_name == 'workflow_dispatch'
 
     runs-on: ubuntu-latest
 
     steps:
 
-      # ------------------------------------------------------
-      # Get your repository
-      # ------------------------------------------------------
-
       - name: 📦 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
 
-      # ------------------------------------------------------
-      # Run OpenCode
-      #
-      # The Action handles OpenCode inside the runner.
-      # You don't install OpenCode on your computer.
-      # ------------------------------------------------------
+      # ⚠️ مهم جدًا: يظبط هوية Git قبل أي commit
+      - name: ⚙️ Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global init.defaultBranch main
+          git config --global advice.detachedHead false
 
       - name: 🤖 Run OpenCode
         uses: anomalyco/opencode/github@latest
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-          # Optional:
-          # If your OpenCode provider requires an API key,
-          # put it in GitHub:
-          #
-          # Settings
-          # → Secrets and variables
-          # → Actions
-          #
-          # Then uncomment the appropriate key.
-          #
           # OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
 
         with:
@@ -248,10 +209,17 @@ jobs:
     steps:
 
       - name: 📦 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: ⚙️ Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global init.defaultBranch main
+          git config --global advice.detachedHead false
 
       - name: 🤖 Run OpenCode
         uses: anomalyco/opencode/github@latest
@@ -285,10 +253,17 @@ jobs:
     steps:
 
       - name: 📦 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: ⚙️ Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global init.defaultBranch main
+          git config --global advice.detachedHead false
 
       - name: 🤖 Run OpenCode
         uses: anomalyco/opencode/github@latest
@@ -319,10 +294,17 @@ jobs:
     steps:
 
       - name: 📦 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: ⚙️ Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global init.defaultBranch main
+          git config --global advice.detachedHead false
 
       - name: 🤖 Review Pull Request
         uses: anomalyco/opencode/github@latest
@@ -367,8 +349,6 @@ jobs:
 # ============================================================
 # JOB 5
 # CODE DOCTOR
-#
-# Runs every Monday.
 # ============================================================
 
   doctor:
@@ -382,10 +362,17 @@ jobs:
     steps:
 
       - name: 📦 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: ⚙️ Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global init.defaultBranch main
+          git config --global advice.detachedHead false
 
       - name: 🩺 Run Code Doctor
         uses: anomalyco/opencode/github@latest
@@ -454,8 +441,6 @@ jobs:
 # ============================================================
 # JOB 6
 # SECURITY SCAN
-#
-# Runs weekly after the doctor.
 # ============================================================
 
   security:
@@ -469,10 +454,17 @@ jobs:
     steps:
 
       - name: 📦 Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: ⚙️ Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global init.defaultBranch main
+          git config --global advice.detachedHead false
 
       - name: 🔐 Run Security Audit
         uses: anomalyco/opencode/github@latest
