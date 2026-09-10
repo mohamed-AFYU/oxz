@@ -179,7 +179,8 @@ var WORLD_SEED = 20260909;
 
 // Block ids
 var AIR=0, GRASS=1, DIRT=2, STONE=3, LOG=4, LEAF=5, SAND=6, PLANK=7, GLASS=8,
-    BRICK=9, WATER=10, COAL=11, IRON=12, GOLD=13, DIAM=14, SNOWG=15, CACTUS=16;
+    BRICK=9, WATER=10, COAL=11, IRON=12, GOLD=13, DIAM=14, SNOWG=15, CACTUS=16,
+    NETHERRACK=17, NPORTAL=18, OBSIDIAN=19, SOULSAND=20, GLOWSTONE=21, LAVA=22;
 var BLOCKS = {
   1:{name:'Grass', top:0, side:1, bottom:2},
   2:{name:'Dirt', top:2, side:2, bottom:2},
@@ -196,10 +197,24 @@ var BLOCKS = {
   13:{name:'Gold Ore', top:16, side:16, bottom:16},
   14:{name:'Diamond Ore', top:17, side:17, bottom:17},
   15:{name:'Snowy Grass', top:18, side:19, bottom:2},
-  16:{name:'Cactus', top:21, side:20, bottom:21}
+  16:{name:'Cactus', top:21, side:20, bottom:21},
+  17:{name:'Netherrack', top:22, side:22, bottom:22},
+  18:{name:'Nether Portal', top:23, side:23, bottom:23},
+  19:{name:'Obsidian', top:24, side:24, bottom:24},
+  20:{name:'Soul Sand', top:25, side:25, bottom:25},
+  21:{name:'Glowstone', top:26, side:26, bottom:26},
+  22:{name:'Lava', top:27, side:27, bottom:27}
 };
 var HOTBAR = [GRASS,DIRT,STONE,LOG,LEAF,SAND,PLANK,GLASS,BRICK];
 var selIndex = 0;
+
+// Dimension state
+var currentDimension = 'overworld';
+var overworldChunks = null;
+var netherChunks = new Map();
+var overworldPortalPos = null;
+var netherPortalPos = null;
+var portalTimer = 0;
 
 // ---------- Deterministic integer hash noise ----------
 function hashI(x, y, z){
@@ -304,9 +319,9 @@ function setBlock(x, y, z, v){
 function isOpaque(id){
   return id===GRASS||id===DIRT||id===STONE||id===LOG||id===LEAF||id===SAND||
          id===PLANK||id===BRICK||id===COAL||id===IRON||id===GOLD||id===DIAM||
-         id===SNOWG||id===CACTUS;
+         id===SNOWG||id===CACTUS||id===NETHERRACK||id===OBSIDIAN||id===SOULSAND||id===GLOWSTONE;
 }
-function isSolid(id){ return id!==AIR && id!==WATER; }
+function isSolid(id){ return id!==AIR && id!==WATER && id!==NPORTAL && id!==LAVA; }
 function markDirty(cx, cz){
   var c = chunks.get(ckey(cx,cz));
   if(c && c.data) c.dirty = true;
@@ -326,6 +341,10 @@ function surfaceY(x, z){
   if(!c || !c.data) return -1;
   var lx = Math.floor(x)-cx*CHUNK, lz = Math.floor(z)-cz*CHUNK;
   if(lx<0||lx>15||lz<0||lz>15) return -1;
+  if(currentDimension==='nether'){
+    for(var y=1;y<H;y++) if(isSolid(c.data[lidx(lx,y,lz)])) return y;
+    return -1;
+  }
   for(var y=H-1;y>0;y--) if(isSolid(c.data[lidx(lx,y,lz)])) return y;
   return -1;
 }
@@ -423,6 +442,106 @@ function plantSpruce(data, tx, th, tz, wx, wz){
   data[lidx(tx,th+trunkH+1,tz)] = LEAF;
 }
 
+// ---------- Nether generation ----------
+function genNetherChunkData(cx, cz){
+  var data = new Uint8Array(CHUNK*H*CHUNK);
+  var ox = cx*CHUNK, oz = cz*CHUNK;
+  for(var lx=0;lx<CHUNK;lx++) for(var lz=0;lz<CHUNK;lz++){
+    var wx = ox+lx, wz = oz+lz;
+    var floorH = 10 + Math.floor(vnoise3(wx*0.05, 0, wz*0.05, 200)*5);
+    var ceilH = H - 4 + Math.floor(vnoise3(wx*0.03, 0, wz*0.03, 210)*3);
+    for(var y=0;y<H;y++){
+      if(y===0) data[lidx(lx,y,lz)] = LAVA;
+      else if(y<=floorH){
+        data[lidx(lx,y,lz)] = NETHERRACK;
+        if(y===floorH && hashF(wx+100,y,wz+100)<0.08) data[lidx(lx,y,lz)] = SOULSAND;
+      }
+      else if(y>=ceilH){
+        data[lidx(lx,y,lz)] = NETHERRACK;
+        if(y===ceilH && hashF(wx+200,y,wz+200)<0.04) data[lidx(lx,y,lz)] = GLOWSTONE;
+      }
+    }
+    if(floorH<7) for(var y2=1;y2<=Math.min(6,floorH);y2++) data[lidx(lx,y2,lz)] = LAVA;
+  }
+  // Glowstone clusters
+  for(var gx=2;gx<CHUNK-2;gx++) for(var gz=2;gz<CHUNK-2;gz++){
+    var gwx=ox+gx, gwz=oz+gz;
+    var gh=H-4+Math.floor(vnoise3(gwx*0.03,0,gwz*0.03,210)*3);
+    if(gh>=H-2) continue;
+    var gr=hashF(gwx,777,gwz);
+    if(gr<0.015){
+      for(var dy=0;dy<2;dy++) for(var dx=-1;dx<=1;dx++) for(var dz=-1;dz<=1;dz++){
+        if(Math.abs(dx)===1&&Math.abs(dz)===1) continue;
+        var bx=gx+dx, by=gh-1-dy, bz=gz+dz;
+        if(bx>=0&&bx<CHUNK&&bz>=0&&bz<CHUNK&&by>=0&&by<H)
+          if(data[lidx(bx,by,bz)]===AIR) data[lidx(bx,by,bz)] = GLOWSTONE;
+      }
+    }
+  }
+  return data;
+}
+
+// ---------- Portal building ----------
+function buildNetherPortal(bx, by, bz){
+  // Ensure chunks exist for the portal area
+  for(var ppx=bx;ppx<bx+4;ppx++){
+    var pcx=Math.floor(ppx/CHUNK), pcz=Math.floor(bz/CHUNK);
+    if(!getChunk(pcx,pcz)){
+      var nc={cx:pcx,cz:pcz,data:null,vboO:null,vboT:null,nO:0,nT:0,dirty:true,meshed:false};
+      nc.data=(currentDimension==='nether')?genNetherChunkData(pcx,pcz):genChunkData(pcx,pcz);
+      chunks.set(ckey(pcx,pcz),nc);
+    }
+  }
+  for(var dy=0;dy<5;dy++) for(var dx=0;dx<4;dx++) setBlock(bx+dx,by+dy,bz,AIR);
+  for(var dx2=0;dx2<4;dx2++){ setBlock(bx+dx2,by,bz,OBSIDIAN); setBlock(bx+dx2,by+4,bz,OBSIDIAN); }
+  for(var dy2=1;dy2<4;dy2++){ setBlock(bx,by+dy2,bz,OBSIDIAN); setBlock(bx+3,by+dy2,bz,OBSIDIAN); }
+  for(var dy3=1;dy3<4;dy3++) for(var dx3=1;dx3<3;dx3++) setBlock(bx+dx3,by+dy3,bz,NPORTAL);
+  // Remesh affected chunks
+  var mcx=Math.floor(bx/CHUNK), mcz=Math.floor(bz/CHUNK);
+  queueMesh(mcx,mcz); queueMesh(mcx+1,mcz); queueMesh(mcx-1,mcz);
+  queueMesh(mcx,mcz+1); queueMesh(mcx,mcz-1);
+}
+
+// ---------- Dimension switching ----------
+function sfxPortal(){ tone(60,1.5,'sine',0.3,30); tone(80,1.2,'sawtooth',0.2,40); }
+function switchDimension(){
+  sfxPortal();
+  if(currentDimension==='overworld'){
+    overworldChunks = chunks;
+    overworldPortalPos = {x:overworldPortalPos?overworldPortalPos.x:player.x, y:overworldPortalPos?overworldPortalPos.y:player.y, z:overworldPortalPos?overworldPortalPos.z:player.z};
+    chunks = netherChunks;
+    currentDimension = 'nether';
+    if(!netherPortalPos){
+      var npx=0, npz=0, npy=15;
+      for(var r=0;r<100;r+=4){
+        var found=false;
+        for(var a=0;a<8;a++){
+          var tx=Math.cos(a/8*Math.PI*2)*r, tz=Math.sin(a/8*Math.PI*2)*r;
+          var sy2=10+Math.floor(vnoise3(tx*0.05,0,tz*0.05,200)*5);
+          if(sy2>1&&sy2<H-6){ npx=tx; npz=tz; npy=sy2+1; found=true; break; }
+        }
+        if(found) break;
+      }
+      netherPortalPos = {x:npx,y:npy,z:npz};
+      buildNetherPortal(Math.floor(npx)-1, Math.floor(npy), Math.floor(npz));
+    }
+    player.x=netherPortalPos.x+1.5; player.z=netherPortalPos.z+0.5;
+    player.y=netherPortalPos.y+1;
+  } else {
+    netherChunks = chunks;
+    chunks = overworldChunks;
+    currentDimension = 'overworld';
+    if(overworldPortalPos){
+      player.x=overworldPortalPos.x+1.5; player.z=overworldPortalPos.z+0.5;
+      var sy=surfaceY(player.x,player.z);
+      player.y=(sy>0?sy:H-2)+1.01;
+    }
+  }
+  player.vx=player.vy=player.vz=0; portalTimer=0;
+  updateStreaming(true);
+  showMsg('Entered the '+(currentDimension==='nether'?'Nether':'Overworld')+'!');
+}
+
 // ---------- Procedural texture atlas ----------
 var TILE_N=32, TILE_PX=16;
 var atlasCanvas=document.createElement('canvas');
@@ -469,6 +588,12 @@ function makeAtlas(){
   tile(19, function(x,y){ if(y<5) return vary('#f2f7f7',10); return vary('#8a5f3c',20); });
   tile(20, function(x,y){ if(x%4===0) return vary('#2a6b1e',10); return vary('#3f9140',14); });
   tile(21, function(x,y){ var dx=x-8,dy=y-8; if((dx*dx+dy*dy)<40) return vary('#7cc46a',10); return vary('#3f9140',12); });
+  tile(22, function(){ return vary('#8b1a0e',20); });
+  tile(23, function(x,y){ var v=Math.sin(x*0.8+y*0.6)*0.3+0.5; return 'rgb('+Math.floor(80+v*60)+','+Math.floor(20+v*30)+','+Math.floor(180+v*60)+')'; });
+  tile(24, function(){ return vary('#1a0a2e',12); });
+  tile(25, function(){ var r=trnd(); if(r<0.15) return vary('#5a3d1e',10); return vary('#6b4a2a',14); });
+  tile(26, function(){ var r=trnd(); if(r<0.3) return vary('#ffdd44',15); return vary('#ffaa22',12); });
+  tile(27, function(){ var r=trnd(); if(r<0.2) return vary('#ff4400',20); return vary('#ff8800',15); });
   var img=g.getImageData(8*16,0,16,16);
   for(var p=0;p<img.data.length;p+=4){ if(trnd()<0.12){ img.data[p]+=20; img.data[p+1]+=25; img.data[p+2]+=10; } }
   g.putImageData(img,8*16,0);
@@ -643,7 +768,7 @@ function buildChunkMesh(c){
   for(var lx=0;lx<CHUNK;lx++) for(var lz=0;lz<CHUNK;lz++) for(var y=0;y<H;y++){
     var id=c.data[lidx(lx,y,lz)];
     if(id===AIR) continue;
-    var transparent=(id===WATER||id===GLASS);
+    var transparent=(id===WATER||id===GLASS||id===NPORTAL||id===LAVA);
     for(var f=0;f<6;f++){
       var d=FACES[f].d;
       var nid=getBlock(ox+lx+d[0], y+d[1], oz+lz+d[2]);
@@ -717,7 +842,7 @@ function processQueues(){
     var g=genQueue.shift();
     if(getChunk(g.cx,g.cz)) continue;
     var c={cx:g.cx,cz:g.cz,data:null,vboO:null,vboT:null,nO:0,nT:0,dirty:false,meshed:false};
-    c.data=genChunkData(g.cx,g.cz);
+    c.data=(currentDimension==='nether')?genNetherChunkData(g.cx,g.cz):genChunkData(g.cx,g.cz);
     chunks.set(ckey(g.cx,g.cz), c);
     meshQueue.push({cx:g.cx,cz:g.cz,d:g.d});
     // borders of already-meshed neighbors need remesh
@@ -822,6 +947,8 @@ function movePlayer(dt){
   }
   if(headInWater()){ drownTimer+=dt; if(drownTimer>2.5){ drownTimer=0; damage(2); flash(); showMsg('You are drowning! Swim up!'); } }
   else drownTimer=Math.max(0,drownTimer-dt*2);
+  var inLava=getBlock(Math.floor(player.x),Math.floor(player.y+0.4),Math.floor(player.z))===LAVA;
+  if(inLava){ damage(2); flash(); }
   if(hurtTimer>0) hurtTimer-=dt;
 }
 function damage(n){
@@ -832,6 +959,10 @@ function damage(n){
   if(health<=0){ health=0; dead=true; updateBars(); showMsg('You died! Respawning...'); setTimeout(respawn,1500); }
 }
 function respawn(){
+  if(currentDimension==='nether'){
+    netherChunks=chunks; chunks=overworldChunks; currentDimension='overworld';
+    updateStreaming(true);
+  }
   var sy=surfaceY(spawnPt.x, spawnPt.z);
   player.x=spawnPt.x; player.z=spawnPt.z; player.y=(sy>0?sy:H-2)+1.01;
   player.vx=player.vy=player.vz=0; health=20; hunger=20; dead=false; updateBars();
@@ -924,6 +1055,7 @@ function trySpawn(dt){
   spawnTimer-=dt;
   if(spawnTimer>0) return;
   spawnTimer=2.5;
+  if(currentDimension==='nether') return;
   var night = !(timeOfDay>0.25&&timeOfDay<0.75);
   // despawn far
   for(var i=mobs.length-1;i>=0;i--){
@@ -1180,6 +1312,7 @@ function resetDrop(d, init){
 for(var wdi2=0;wdi2<drops.length;wdi2++) resetDrop(drops[wdi2], true);
 var weatherVBO=gl.createBuffer();
 function updateWeather(dt){
+  if(currentDimension==='nether'){ weather.type='clear'; return; }
   weather.t+=dt;
   if(weather.t>weather.dur){
     weather.t=0; weather.dur=25+Math.random()*35;
@@ -1288,20 +1421,22 @@ function render(){
   gl.uniformMatrix4fv(uViewF,false,viewMat);
   gl.disable(gl.CULL_FACE);
   gl.depthMask(false);
-  var verts=[];
-  for(var k=0;k<clouds.length;k++){
-    var cl=clouds[k];
-    cl.ox+=cl.s*0.016; if(cl.ox>90)cl.ox=-90;
-    var wx=player.x+cl.ox, wz=player.z+cl.oz, y=56;
-    verts.push(wx,y,wz, wx+cl.w,y,wz, wx+cl.w,y,wz+cl.d);
-    verts.push(wx,y,wz, wx+cl.w,y,wz+cl.d, wx,y,wz+cl.d);
+  if(currentDimension!=='nether'){
+    var verts=[];
+    for(var k=0;k<clouds.length;k++){
+      var cl=clouds[k];
+      cl.ox+=cl.s*0.016; if(cl.ox>90)cl.ox=-90;
+      var wx=player.x+cl.ox, wz=player.z+cl.oz, y=56;
+      verts.push(wx,y,wz, wx+cl.w,y,wz, wx+cl.w,y,wz+cl.d);
+      verts.push(wx,y,wz, wx+cl.w,y,wz+cl.d, wx,y,wz+cl.d);
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER,cloudVBO);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(verts),gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(aPosF);
+    gl.vertexAttribPointer(aPosF,3,gl.FLOAT,false,0,0);
+    gl.uniform4f(uColF,1,1,1,0.35+0.25*sunLevel);
+    gl.drawArrays(gl.TRIANGLES,0,verts.length/3);
   }
-  gl.bindBuffer(gl.ARRAY_BUFFER,cloudVBO);
-  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(verts),gl.DYNAMIC_DRAW);
-  gl.enableVertexAttribArray(aPosF);
-  gl.vertexAttribPointer(aPosF,3,gl.FLOAT,false,0,0);
-  gl.uniform4f(uColF,1,1,1,0.35+0.25*sunLevel);
-  gl.drawArrays(gl.TRIANGLES,0,verts.length/3);
   gl.depthMask(true);
   if(selectedBlock){
     var b=selectedBlock;
@@ -1509,7 +1644,8 @@ function updateDebug(){
   line += 'XYZ: '+player.x.toFixed(1)+' / '+player.y.toFixed(1)+' / '+player.z.toFixed(1)+'\n';
   line += 'Chunk: '+pc[0]+', '+pc[1]+'  Block: '+Math.floor(player.x)+', '+Math.floor(player.y)+', '+Math.floor(player.z)+'\n';
   line += 'Facing: '+facing+' ('+yawDeg.toFixed(0)+'°)\n';
-  line += 'Biome: '+BIOME_NAMES[b.biome]+'\n';
+  line += 'Dimension: '+(currentDimension==='nether'?'Nether':'Overworld')+'\n';
+  line += 'Biome: '+(currentDimension==='nether'?'Nether':BIOME_NAMES[b.biome])+'\n';
   line += 'Light: '+(isDay?'Day':'Night')+' (t='+timeOfDay.toFixed(3)+')\n';
   line += 'Time: Day '+dayNum+' '+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')+'\n';
   line += 'Weather: '+weather.type+'\n';
@@ -1737,6 +1873,7 @@ var DAY_LEN=480;
 var sunLevel=1, fogColor=[0.6,0.8,1.0], skyColor=[0.6,0.8,1.0];
 function lerp(a,b,t){ return a+(b-a)*t; }
 function updateSky(dt){
+  if(currentDimension==='nether'){ sunLevel=0.3; skyColor=[0.25,0.05,0.05]; fogColor=[0.35,0.08,0.05]; return; }
   timeOfDay=(timeOfDay+dt/DAY_LEN)%1;
   var dayT=(timeOfDay-0.25)/0.5;
   if(dayT<0||dayT>1){ sunLevel=0.12; skyColor=[0.03,0.04,0.10]; fogColor=[0.03,0.04,0.10]; }
@@ -1751,6 +1888,7 @@ function updateSky(dt){
 }
 var ambientT=3;
 function updateAmbient(dt){
+  if(currentDimension==='nether') return;
   ambientT-=dt;
   if(ambientT>0) return;
   ambientT=4+Math.random()*6;
@@ -1798,6 +1936,12 @@ function loop(){
       trySpawn(dt);
       updateWeather(dt);
       updateAmbient(dt);
+      // Portal detection
+      var pbx=Math.floor(player.x), pby=Math.floor(player.y+0.5), pbz=Math.floor(player.z);
+      if(getBlock(pbx,pby,pbz)===NPORTAL||getBlock(pbx,pby-1,pbz)===NPORTAL){
+        portalTimer+=dt;
+        if(portalTimer>2.0){ switchDimension(); }
+      } else { portalTimer=Math.max(0,portalTimer-dt*2); }
       if(atkCd>0) atkCd-=dt;
       perfTime+=dt;
       updateDebug();
@@ -1813,7 +1957,7 @@ function loop(){
     var fps=Math.round(fpsFrames/fpsTime);
     fpsEl.childNodes[0].textContent='FPS: '+fps+' | '+chunks.size+' chunks';
     var b=biomeAt(Math.floor(player.x),Math.floor(player.z));
-    document.getElementById('biome-label').textContent=BIOME_NAMES[b.biome]+(weather.type!=='clear'?(weather.type==='rain'?' 🌧':' 🌨'):'');
+    document.getElementById('biome-label').textContent=(currentDimension==='nether'?'Nether':BIOME_NAMES[b.biome])+(weather.type!=='clear'?(weather.type==='rain'?' 🌧':' 🌨'):'');
     coordsEl.textContent='XYZ: '+player.x.toFixed(1)+' / '+player.y.toFixed(1)+' / '+player.z.toFixed(1)+(player.fly?' [FLY]':'')+' | Mobs: '+mobs.length+' Kills: '+kills;
     fpsFrames=0; fpsTime=0;
   }
@@ -1824,9 +1968,11 @@ function boot(){
   resize();
   document.getElementById('loading').textContent='Generating terrain...';
   findSpawn();
+  overworldChunks = chunks;
   buildHotbar(); updateHand(); updateBars();
   updateStreaming(true);
   var spins=0;
+  var portalBuilt=false;
   var iv=setInterval(function(){
     processQueues();
     spins++;
@@ -1839,6 +1985,19 @@ function boot(){
     }
     document.getElementById('loading').textContent='Generating terrain... '+ready+'/'+need+' chunks';
     if((ready>=need&&spins>2)||spins>400){
+      if(!portalBuilt){
+        portalBuilt=true;
+        // Build Nether portal 5 blocks in front of player
+        var pfDir = Math.sin(player.yaw), pfDz = -Math.cos(player.yaw);
+        var portalBX = Math.floor(player.x + pfDir*5) - 1;
+        var portalBZ = Math.floor(player.z + pfDz*5);
+        var portalBY = Math.floor(player.y);
+        for(var px=portalBX;px<portalBX+4;px++){
+          if(!isSolid(getBlock(px,portalBY-1,portalBZ))) setBlock(px,portalBY-1,portalBZ,STONE);
+        }
+        buildNetherPortal(portalBX, portalBY, portalBZ);
+        overworldPortalPos = {x:portalBX+1.5, y:portalBY, z:portalBZ+0.5};
+      }
       clearInterval(iv);
       // settle player onto ground
       var sy=surfaceY(player.x,player.z);
