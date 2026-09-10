@@ -1,24 +1,12 @@
-name: 🤖 Cloud OpenCode
+name: 🤖 OpenCode Agentic PR Pipeline
 
 on:
-
   workflow_dispatch:
     inputs:
       prompt:
-        description: "What should OpenCode do?"
+        description: "Task for the agent pipeline"
         required: true
         type: string
-      mode:
-        description: "How should OpenCode work?"
-        required: true
-        default: "build"
-        type: choice
-        options:
-          - build
-          - review
-          - doctor
-          - security
-          - explain
       model:
         description: "OpenCode model"
         required: true
@@ -31,444 +19,975 @@ on:
   pull_request_review_comment:
     types: [created]
 
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
-
-  schedule:
-    - cron: "0 9 * * 1"
-
-
 permissions:
   contents: write
   pull-requests: write
   issues: write
-  id-token: write
+  actions: write
 
+concurrency:
+  group: opencode-agentic-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  OC_DIR: .opencode-pipeline
+  OC_STATE: .opencode-pipeline/state.json
+  OC_TASK: .opencode-pipeline/task.md
+  OC_REVIEW: .opencode-pipeline/review.md
+  OC_VERIFY: .opencode-pipeline/verification.md
+  OC_HISTORY: .opencode-pipeline/history.md
+  DEFAULT_MODEL: opencode/mimo-v2.5-free
 
 jobs:
 
   # ============================================================
-  # JOB 1 — MANUAL
+  # 1. INITIAL BUILD
+  #
+  # Only a real human workflow_dispatch or a human /oc request
+  # outside an existing PR can start a new PR.
+  # Internal dispatches are explicitly excluded.
   # ============================================================
-  manual:
-    name: 🧠 OpenCode Manual
-    if: github.event_name == 'workflow_dispatch'
+  build:
+    name: 🏗️ Build Agent
+    if: |
+      (
+        github.event_name == 'workflow_dispatch' &&
+        !startsWith(inputs.prompt, '/oc-internal ')
+      ) ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.comment.user.type != 'Bot' &&
+        github.event.issue.pull_request == null &&
+        (
+          startsWith(github.event.comment.body, '/oc ') ||
+          github.event.comment.body == '/oc' ||
+          startsWith(github.event.comment.body, '/opencode ') ||
+          github.event.comment.body == '/opencode'
+        )
+      )
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📦 Checkout repository
-        uses: actions/checkout@v4
+      - name: 📦 Checkout base
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
           token: ${{ secrets.PAT_TOKEN }}
 
-      - name: ⚙️ Configure Git
+      - name: 🧰 Prepare branch and durable context
+        id: prepare
         env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          MANUAL_PROMPT: ${{ inputs.prompt }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          BASE_REF: ${{ github.ref_name }}
         run: |
-          git config --global user.name "mohamed-AFYU"
-          git config --global user.email "findlapmn@gmail.com"
-          git config --global init.defaultBranch main
-          git config --global advice.detachedHead false
-          git config --global credential.helper store
-          git remote set-url origin "https://x-access-token:${PAT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          set -euo pipefail
 
-      - name: 🤖 Run OpenCode
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            prompt="$MANUAL_PROMPT"
+            model="${{ inputs.model }}"
+          else
+            body="$COMMENT_BODY"
+            if [[ "$body" == /opencode* ]]; then
+              prompt="${body#/opencode}"
+            else
+              prompt="${body#/oc}"
+            fi
+            prompt="$(printf '%s' "$prompt" | sed 's/^[[:space:]]*//')"
+            model="$DEFAULT_MODEL"
+          fi
+
+          base="$BASE_REF"
+          if [[ -z "$base" ]]; then
+            base="$(gh repo view "$GITHUB_REPOSITORY" --json defaultBranchRef --jq '.defaultBranchRef.name')"
+          fi
+
+          git fetch origin "$base"
+          git checkout "$base"
+
+          slug="$(printf '%s' "$prompt" |
+            tr '[:upper:]' '[:lower:]' |
+            sed 's/[^a-z0-9]/-/g; s/--*/-/g' |
+            cut -c1-48 |
+            sed 's/-$//')"
+          slug="${slug:-feature}"
+
+          branch="oc/${GITHUB_RUN_ID}-${slug}"
+
+          git checkout -b "$branch"
+
+          mkdir -p "$OC_DIR"
+
+          cat > "$OC_TASK" <<EOF
+          # User Task
+
+          $prompt
+          EOF
+
+          cat > "$OC_STATE" <<'JSON'
+          {
+            "version": 1,
+            "status": "BUILDING",
+            "phase": "BUILD",
+            "review_cycle": 0,
+            "fix_cycle": 0,
+            "verify_cycle": 0,
+            "stagnation": 0,
+            "last_findings_fingerprint": "",
+            "last_verified_commit": "",
+            "human_approval_required": false,
+            "stop_reason": ""
+          }
+          JSON
+
+          cat > "$OC_HISTORY" <<EOF
+          # OpenCode Agentic Pipeline History
+
+          ## Pipeline started
+          - workflow_run: ${GITHUB_RUN_ID}
+          - actor: ${GITHUB_ACTOR}
+          - base: ${base}
+          - branch: ${branch}
+          - started_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          ## User task
+
+          ${prompt}
+          EOF
+
+          git add "$OC_DIR"
+          git commit -m "chore(oc): initialize agent pipeline"
+          git push -u origin "$branch"
+
+          {
+            echo "branch=$branch"
+            echo "base=$base"
+            echo "model=$model"
+            echo "prompt<<EOF"
+            printf '%s\n' "$prompt"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 🤖 Run Build Agent
+        uses: anomalyco/opencode/github@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        with:
+          model: ${{ steps.prepare.outputs.model }}
+          use_github_token: true
+          agent: build
+          prompt: |
+            You are the BUILD AGENT in a stateful multi-agent engineering pipeline.
+
+            Work ONLY on the current checked-out branch.
+            DO NOT create another branch.
+            DO NOT create a Pull Request.
+            DO NOT merge anything.
+
+            USER TASK:
+            ${{ steps.prepare.outputs.prompt }}
+
+            DURABLE CONTEXT:
+            - .opencode-pipeline/task.md
+            - .opencode-pipeline/state.json
+            - .opencode-pipeline/history.md
+
+            MISSION:
+            Implement the user's task completely, correctly, and maintainably.
+
+            NON-NEGOTIABLE RULES:
+            1. Inspect the repository before modifying it.
+            2. Understand existing architecture and conventions.
+            3. Do not modify unrelated files.
+            4. Prefer small, coherent, maintainable changes.
+            5. Never weaken, delete, or bypass tests merely to make them pass.
+            6. Never claim a check passed unless you actually ran it.
+            7. Add or update tests for meaningful behavior.
+            8. Run the strongest relevant tests/build/lint/type checks available.
+            9. Investigate failures instead of hiding them.
+            10. Preserve backwards compatibility unless a breaking change is explicitly required.
+            11. Do not perform release, merge, force-push, or destructive GitHub operations.
+            12. Do not declare the task complete merely because code was changed.
+
+            HANDOFF CONTRACT:
+            Before finishing:
+            - update state.json with factual status
+            - append evidence to history.md
+            - record important implementation decisions
+            - record validation commands and their actual results
+            - commit all coherent source and context changes
+
+            The next agent is independent and will not trust your claims.
+
+      - name: 📋 Create Pull Request
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          BRANCH: ${{ steps.prepare.outputs.branch }}
+          BASE: ${{ steps.prepare.outputs.base }}
+          PROMPT: ${{ steps.prepare.outputs.prompt }}
+        run: |
+          set -euo pipefail
+
+          git push origin "HEAD:${BRANCH}"
+
+          pr_url="$(gh pr create \
+            --base "$BASE" \
+            --head "$BRANCH" \
+            --title "🤖 ${PROMPT:0:70}" \
+            --body "$(cat <<EOF
+          ## 🤖 OpenCode Agentic Pipeline
+
+          This PR is controlled by a stateful multi-agent pipeline.
+
+          ### User task
+          ${PROMPT}
+
+          ### Pipeline
+          \`BUILD → REVIEW ⇄ FIX/VERIFY → FINALIZE → HUMAN MERGE\`
+
+          The pipeline uses durable state under \`.opencode-pipeline/\`.
+          The final merge always requires an explicit human \`/oc merge\` command.
+          EOF
+          )")"
+
+          number="$(gh pr view "$pr_url" --json number --jq '.number')"
+
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: 🔍 Dispatch review
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR: ${{ steps.pr.outputs.number }}
+          MODEL: ${{ steps.prepare.outputs.model }}
+          BASE: ${{ steps.prepare.outputs.base }}
+        run: |
+          set -euo pipefail
+
+          gh workflow run "$(basename "$GITHUB_WORKFLOW")" \
+            --ref "$BASE" \
+            -f prompt="/oc-internal review $PR" \
+            -f model="$MODEL"
+
+  # ============================================================
+  # 2. HUMAN COMMAND ROUTER
+  #
+  # Comments are only a user interface. They never directly
+  # cause agent-to-agent chaining.
+  # ============================================================
+  command_router:
+    name: 🧭 Command Router
+    if: |
+      (
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.pull_request != null
+        ) ||
+        github.event_name == 'pull_request_review_comment'
+      ) &&
+      github.event.comment.user.type != 'Bot' &&
+      (
+        startsWith(github.event.comment.body, '/oc ') ||
+        github.event.comment.body == '/oc' ||
+        startsWith(github.event.comment.body, '/opencode ') ||
+        github.event.comment.body == '/opencode'
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧭 Parse command
+        id: parse
+        env:
+          BODY: ${{ github.event.comment.body }}
+          PR: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$BODY" == /opencode* ]]; then
+            text="${BODY#/opencode}"
+          else
+            text="${BODY#/oc}"
+          fi
+
+          text="$(printf '%s' "$text" | sed 's/^[[:space:]]*//')"
+          command="$(printf '%s' "$text" | awk '{print tolower($1)}')"
+
+          case "$command" in
+            review|fix|verify|finalize|status|resume|stop|merge)
+              ;;
+            build)
+              ;;
+            "")
+              command="status"
+              ;;
+            *)
+              # Any ordinary /oc request on an existing PR is treated
+              # as an explicit human change request, then reviewed.
+              command="build"
+              ;;
+          esac
+
+          echo "command=$command" >> "$GITHUB_OUTPUT"
+          echo "pr=$PR" >> "$GITHUB_OUTPUT"
+
+          echo "Parsed: $command for PR #$PR"
+
+      - name: 🔐 Handle merge command
+        if: steps.parse.outputs.command == 'merge'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR: ${{ steps.parse.outputs.pr }}
+        run: |
+          set -euo pipefail
+
+          gh pr view "$PR" --json state,isDraft,mergeable,headRefName \
+            --jq '"state=\(.state) draft=\(.isDraft) mergeable=\(.mergeable) branch=\(.headRefName)"'
+
+          state="$(gh pr view "$PR" --json state --jq '.state')"
+          draft="$(gh pr view "$PR" --json isDraft --jq '.isDraft')"
+          mergeable="$(gh pr view "$PR" --json mergeable --jq '.mergeable')"
+
+          if [[ "$state" != "OPEN" || "$draft" != "false" || "$mergeable" != "MERGEABLE" ]]; then
+            gh pr comment "$PR" --body \
+              "🔐 Merge refused. The PR is not currently in a safe mergeable state."
+            exit 1
+          fi
+
+          # Fetch the state file from the PR branch without checking it out.
+          branch="$(gh pr view "$PR" --json headRefName --jq '.headRefName')"
+          tmp="$(mktemp)"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${OC_STATE}?ref=${branch}" \
+            --jq '.content' | base64 -d > "$tmp"
+
+          status="$(jq -r '.status // empty' "$tmp")"
+
+          if [[ "$status" != "READY_FOR_HUMAN" ]]; then
+            gh pr comment "$PR" --body \
+              "🔐 Merge refused. Pipeline state is \`$status\`, not \`READY_FOR_HUMAN\`."
+            exit 1
+          fi
+
+          gh pr comment "$PR" --body \
+            "🔐 Human approval received via \`/oc merge\`. Final merge gate passed."
+
+          gh pr merge "$PR" --merge --delete-branch
+
+      - name: 📊 Status command
+        if: steps.parse.outputs.command == 'status'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR: ${{ steps.parse.outputs.pr }}
+        run: |
+          set -euo pipefail
+
+          branch="$(gh pr view "$PR" --json headRefName --jq '.headRefName')"
+
+          tmp="$(mktemp)"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${OC_STATE}?ref=${branch}" \
+            --jq '.content' | base64 -d > "$tmp"
+
+          status="$(jq -r '.status // "UNKNOWN"' "$tmp")"
+          phase="$(jq -r '.phase // "UNKNOWN"' "$tmp")"
+          review="$(jq -r '.review_cycle // 0' "$tmp")"
+          fixes="$(jq -r '.fix_cycle // 0' "$tmp")"
+          verifies="$(jq -r '.verify_cycle // 0' "$tmp")"
+          stop_reason="$(jq -r '.stop_reason // ""' "$tmp")"
+
+          body="$(cat <<EOF
+          ## 🤖 OpenCode Pipeline Status
+
+          **PR:** #${PR}
+          **State:** \`${status}\`
+          **Phase:** \`${phase}\`
+          **Review cycles:** ${review}
+          **Fix cycles:** ${fixes}
+          **Verification cycles:** ${verifies}
+
+          ${stop_reason:+**Stop reason:** ${stop_reason}}
+          EOF
+          )"
+
+          gh pr comment "$PR" --body "$body"
+
+      - name: 🛑 Stop command
+        if: steps.parse.outputs.command == 'stop'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR: ${{ steps.parse.outputs.pr }}
+        run: |
+          set -euo pipefail
+
+          branch="$(gh pr view "$PR" --json headRefName --jq '.headRefName')"
+
+          gh api \
+            --method PUT \
+            "repos/${GITHUB_REPOSITORY}/contents/${OC_STATE}" \
+            -f message="chore(oc): stop pipeline" \
+            -f branch="$branch" \
+            -f content="$(printf '%s' '{"version":1,"status":"STOPPED","phase":"STOPPED","stop_reason":"Stopped by human via /oc stop","human_approval_required":false}' | base64 -w0)" \
+            -f sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${OC_STATE}?ref=${branch}" --jq '.sha')" \
+            >/dev/null
+
+          gh pr comment "$PR" --body "🛑 Pipeline stopped by human. No further agent work will be dispatched."
+
+      - name: 🚦 Dispatch agent command
+        if: |
+          steps.parse.outputs.command != 'merge' &&
+          steps.parse.outputs.command != 'status' &&
+          steps.parse.outputs.command != 'stop'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR: ${{ steps.parse.outputs.pr }}
+          COMMAND: ${{ steps.parse.outputs.command }}
+          MODEL: ${{ env.DEFAULT_MODEL }}
+        run: |
+          set -euo pipefail
+
+          gh workflow run "$(basename "$GITHUB_WORKFLOW")" \
+            --ref "${{ github.ref_name }}" \
+            -f prompt="/oc-internal ${COMMAND} ${PR}" \
+            -f model="$MODEL"
+
+  # ============================================================
+  # 3. STATEFUL PIPELINE ENGINE
+  #
+  # Internal workflow_dispatch events are the ONLY agent-to-agent
+  # transport. This prevents bot comments from recursively
+  # triggering themselves.
+  # ============================================================
+  engine:
+    name: 🧠 Pipeline Engine
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      startsWith(inputs.prompt, '/oc-internal ')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📦 Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: 🧭 Parse internal request
+        id: request
+        env:
+          REQUEST: ${{ inputs.prompt }}
+        run: |
+          set -euo pipefail
+
+          command="$(printf '%s' "$REQUEST" | sed -E 's#^/oc-internal[[:space:]]+##' | awk '{print tolower($1)}')"
+          pr="$(printf '%s' "$REQUEST" | grep -oE '[0-9]+$' | tail -1 || true)"
+
+          test -n "$command"
+          test -n "$pr"
+
+          echo "command=$command" >> "$GITHUB_OUTPUT"
+          echo "pr=$pr" >> "$GITHUB_OUTPUT"
+
+      - name: 📥 Checkout PR branch
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR: ${{ steps.request.outputs.pr }}
+        run: |
+          set -euo pipefail
+          gh pr checkout "$PR" --force
+
+      - name: 🧯 Refuse stopped pipeline
+        env:
+          COMMAND: ${{ steps.request.outputs.command }}
+        run: |
+          set -euo pipefail
+
+          if [[ -f "$OC_STATE" ]]; then
+            status="$(jq -r '.status // ""' "$OC_STATE")"
+            if [[ "$status" == "STOPPED" && "$COMMAND" != "resume" ]]; then
+              echo "Pipeline is stopped."
+              exit 1
+            fi
+          fi
+
+      # ----------------------------------------------------------
+      # BUILD ON EXISTING PR
+      # ----------------------------------------------------------
+      - name: 🏗️ Build Agent on existing PR
+        if: steps.request.outputs.command == 'build'
         uses: anomalyco/opencode/github@latest
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
           model: ${{ inputs.model }}
           use_github_token: true
+          agent: build
           prompt: |
-            You are working on this repository through GitHub Actions.
+            You are the BUILD/FOLLOW-UP AGENT.
 
-            USER REQUEST:
-            ${{ inputs.prompt }}
+            You are working inside an existing PR branch.
 
-            WORK MODE:
-            ${{ inputs.mode }}
+            DO NOT:
+            - create another branch
+            - create another PR
+            - merge
+            - rewrite unrelated history
+            - touch unrelated files
 
-            General rules:
-            - First inspect the repository.
-            - Understand the existing architecture before changing anything.
-            - Do not modify unrelated files.
-            - Prefer small, focused changes.
-            - Reuse existing code and conventions.
-            - Run relevant tests after changes.
-            - Run build/lint/type checks when available.
-            - Never fake successful tests.
-            - If something fails, investigate it.
-            - Explain important decisions.
-            - If code changes are appropriate, create a branch and Pull Request.
-            - Make the Pull Request description clear and useful.
+            Read:
+            - .opencode-pipeline/task.md
+            - .opencode-pipeline/state.json
+            - .opencode-pipeline/review.md if present
+            - .opencode-pipeline/history.md
 
-            Mode instructions:
+            Apply the human's requested change represented by the current
+            PR conversation/context.
 
-            BUILD:
-            Implement the requested feature or fix.
+            Treat this as an explicit human instruction, not as permission
+            to bypass review.
 
-            REVIEW:
-            Review the repository carefully.
-            Find bugs, bad logic, security issues, performance issues,
-            maintainability problems, and suspicious code.
-            Do not make changes unless the user explicitly requested them.
+            Implement it completely, test it, record evidence, and commit.
 
-            DOCTOR:
-            Act as a senior software engineer performing a complete
-            health check of the repository.
-            Find real problems rather than inventing theoretical ones.
-            Prioritize high-confidence and high-impact issues.
-            If fixes are requested, implement them and create a PR.
-
-            SECURITY:
-            Perform a security-focused audit.
-            Look for authentication problems, injection vulnerabilities,
-            unsafe input handling, secrets, insecure dependencies,
-            permission problems, and dangerous filesystem/network operations.
-
-            EXPLAIN:
-            Do not modify code unless explicitly requested.
-            Explain the relevant code, architecture, bugs, and reasoning.
-
-      - name: 🧹 Cleanup credentials
-        if: always()
-        run: |
-          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git" || true
-          rm -f ~/.git-credentials || true
-
-
-  # ============================================================
-  # JOB 2 — /oc COMMENT
-  # ============================================================
-  comment:
-    name: 💬 OpenCode Comment
-    if: |
-      github.event_name == 'issue_comment' &&
-      (
-        contains(github.event.comment.body, '/oc') ||
-        contains(github.event.comment.body, '/opencode')
-      )
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 📦 Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: ⚙️ Configure Git
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          git config --global user.name "YOUR_GITHUB_USERNAME"
-          git config --global user.email "YOUR_EMAIL"
-          git config --global init.defaultBranch main
-          git config --global advice.detachedHead false
-          git config --global credential.helper store
-          git remote set-url origin "https://x-access-token:${PAT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-
-      - name: 🤖 Run OpenCode
+      # ----------------------------------------------------------
+      # REVIEW
+      # ----------------------------------------------------------
+      - name: 🔍 Review Agent
+        if: steps.request.outputs.command == 'review'
         uses: anomalyco/opencode/github@latest
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
-          model: opencode/mimo-v2.5-free
+          model: ${{ inputs.model }}
           use_github_token: true
-
-      - name: 🧹 Cleanup credentials
-        if: always()
-        run: |
-          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git" || true
-          rm -f ~/.git-credentials || true
-
-
-  # ============================================================
-  # JOB 3 — LINE REVIEW
-  # ============================================================
-  review_comment:
-    name: 🎯 OpenCode Line Review
-    if: |
-      github.event_name == 'pull_request_review_comment' &&
-      (
-        contains(github.event.comment.body, '/oc') ||
-        contains(github.event.comment.body, '/opencode')
-      )
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 📦 Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: ⚙️ Configure Git
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          git config --global user.name "YOUR_GITHUB_USERNAME"
-          git config --global user.email "YOUR_EMAIL"
-          git config --global init.defaultBranch main
-          git config --global advice.detachedHead false
-          git config --global credential.helper store
-          git remote set-url origin "https://x-access-token:${PAT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-
-      - name: 🤖 Run OpenCode
-        uses: anomalyco/opencode/github@latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-        with:
-          model: opencode/mimo-v2.5-free
-          use_github_token: true
-
-      - name: 🧹 Cleanup credentials
-        if: always()
-        run: |
-          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git" || true
-          rm -f ~/.git-credentials || true
-
-
-  # ============================================================
-  # JOB 4 — AUTO PR REVIEW
-  # ============================================================
-  pull_request_review:
-    name: 🔍 Automatic PR Review
-    if: |
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 📦 Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: ⚙️ Configure Git
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          git config --global user.name "YOUR_GITHUB_USERNAME"
-          git config --global user.email "YOUR_EMAIL"
-          git config --global init.defaultBranch main
-          git config --global advice.detachedHead false
-          git config --global credential.helper store
-          git remote set-url origin "https://x-access-token:${PAT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-
-      - name: 🤖 Review Pull Request
-        uses: anomalyco/opencode/github@latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-        with:
-          model: opencode/mimo-v2.5-free
-          use_github_token: true
+          agent: review
           prompt: |
-            Review this Pull Request as a senior software engineer.
+            You are the REVIEW AGENT.
 
-            Carefully inspect:
-            - The complete diff
-            - Surrounding code
-            - Existing architecture
-            - Tests
-            - Error handling
-            - Security
-            - Performance
-            - Potential regressions
+            You are an independent, adversarial, evidence-driven senior
+            software engineer.
 
-            Do NOT make changes.
+            PR NUMBER: ${{ steps.request.outputs.pr }}
 
-            Only report issues that are meaningful and reasonably
-            supported by the code.
+            DO NOT:
+            - modify application/source code
+            - fix findings yourself
+            - merge
+            - approve based on another agent's claim
 
-            For every important problem explain:
+            Read:
+            - .opencode-pipeline/task.md
+            - .opencode-pipeline/state.json
+            - .opencode-pipeline/history.md
+            - .opencode-pipeline/review.md if present
+            - the complete PR diff
+            - surrounding source
+            - tests and project configuration
 
-            1. What is wrong
-            2. Why it is a problem
-            3. Where it occurs
-            4. How it could be fixed
+            Independently evaluate:
+            1. Original requirements
+            2. Functional correctness
+            3. Architecture
+            4. Edge cases
+            5. Error handling
+            6. Security
+            7. Performance
+            8. Concurrency
+            9. Backwards compatibility
+            10. Tests
+            11. Build/type/lint
+            12. Regression risk
 
-            If the PR looks good, say so clearly.
+            Only report real, meaningful, evidence-backed defects.
+            Do not turn style preferences into blockers.
 
-      - name: 🧹 Cleanup credentials
-        if: always()
-        run: |
-          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git" || true
-          rm -f ~/.git-credentials || true
+            For each finding write:
+            ID:
+            SEVERITY:
+            FILE:
+            LOCATION:
+            EVIDENCE:
+            PROBLEM:
+            REQUIRED_FIX:
 
+            The review is a ledger. Do not erase unresolved findings
+            merely because a new agent claims they are fixed.
 
-  # ============================================================
-  # JOB 5 — CODE DOCTOR
-  # ============================================================
-  doctor:
-    name: 🩺 Code Doctor
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
+            At the end write exactly one:
+            VERDICT: PASS
+            or
+            VERDICT: NEEDS_FIX
 
-    steps:
-      - name: 📦 Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-          token: ${{ secrets.PAT_TOKEN }}
+            Update .opencode-pipeline/review.md and history.md.
+            Commit only context updates if needed.
 
-      - name: ⚙️ Configure Git
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          git config --global user.name "YOUR_GITHUB_USERNAME"
-          git config --global user.email "YOUR_EMAIL"
-          git config --global init.defaultBranch main
-          git config --global advice.detachedHead false
-          git config --global credential.helper store
-          git remote set-url origin "https://x-access-token:${PAT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-
-      - name: 🩺 Run Code Doctor
+      # ----------------------------------------------------------
+      # FIX
+      # ----------------------------------------------------------
+      - name: 🛠️ Fix Agent
+        if: steps.request.outputs.command == 'fix'
         uses: anomalyco/opencode/github@latest
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
-          model: opencode/mimo-v2.5-free
+          model: ${{ inputs.model }}
           use_github_token: true
+          agent: build
           prompt: |
-            You are the Code Doctor for this repository.
+            You are the FIX AGENT.
 
-            Perform a deep health check of the entire codebase.
+            PR NUMBER: ${{ steps.request.outputs.pr }}
 
-            Investigate:
+            Work on the existing PR branch only.
+            DO NOT create another PR.
+            DO NOT merge.
 
-            1. Real bugs
-            2. Broken logic
-            3. Crash risks
-            4. Security vulnerabilities
-            5. Bad error handling
-            6. Performance problems
-            7. Race conditions
-            8. Incorrect assumptions
-            9. Dead or unreachable code
-            10. Suspicious TODO/FIXME items
-            11. Dependency problems
-            12. Poor architecture that can cause real problems
-            13. Missing tests for important behavior
+            Read:
+            - .opencode-pipeline/task.md
+            - .opencode-pipeline/review.md
+            - .opencode-pipeline/state.json
+            - .opencode-pipeline/history.md
 
-            IMPORTANT:
+            Treat review findings as explicit defects that must be
+            independently verified.
 
-            Do not invent problems just to produce a report.
+            For every unresolved finding:
+            1. reproduce/verify it
+            2. identify root cause
+            3. implement the smallest correct fix
+            4. add/update tests when appropriate
+            5. run relevant validation
+            6. record evidence
 
-            Only report issues that you can support with evidence
-            from the repository.
+            If a finding is invalid, explain why with evidence.
+            Never silently skip it.
 
-            Prioritize findings:
+            Do not perform unrelated refactors.
+            Commit coherent fixes and update the durable context.
 
-            CRITICAL
-            HIGH
-            MEDIUM
-            LOW
-
-            For each important finding provide:
-
-            - Title
-            - Severity
-            - File
-            - Relevant code/area
-            - Why it is a problem
-            - How to reproduce it if possible
-            - Recommended fix
-
-            Do not modify the repository during this audit.
-
-            If you find an issue that is worth fixing,
-            create a clear GitHub issue or report it through
-            the available GitHub context.
-
-      - name: 🧹 Cleanup credentials
-        if: always()
-        run: |
-          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git" || true
-          rm -f ~/.git-credentials || true
-
-
-  # ============================================================
-  # JOB 6 — SECURITY AUDIT
-  # ============================================================
-  security:
-    name: 🔐 Security Audit
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: 📦 Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-          token: ${{ secrets.PAT_TOKEN }}
-
-      - name: ⚙️ Configure Git
-        env:
-          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          git config --global user.name "YOUR_GITHUB_USERNAME"
-          git config --global user.email "YOUR_EMAIL"
-          git config --global init.defaultBranch main
-          git config --global advice.detachedHead false
-          git config --global credential.helper store
-          git remote set-url origin "https://x-access-token:${PAT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-
-      - name: 🔐 Run Security Audit
+      # ----------------------------------------------------------
+      # VERIFY
+      # ----------------------------------------------------------
+      - name: 🧪 Verification Agent
+        if: steps.request.outputs.command == 'verify'
         uses: anomalyco/opencode/github@latest
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
-          model: opencode/mimo-v2.5-free
+          model: ${{ inputs.model }}
           use_github_token: true
+          agent: review
           prompt: |
-            Perform a security audit of this repository.
+            You are the VERIFICATION AGENT.
 
-            Look for:
+            PR NUMBER: ${{ steps.request.outputs.pr }}
 
-            - Hardcoded secrets
-            - API keys
-            - Authentication vulnerabilities
-            - Authorization problems
-            - Injection vulnerabilities
-            - XSS
-            - Command injection
-            - Path traversal
-            - Unsafe file operations
-            - SSRF
-            - Unsafe deserialization
-            - Insecure randomness
-            - Dangerous dependency usage
-            - Missing input validation
-            - Privilege escalation
-            - Sensitive data exposure
-            - Insecure configuration
+            Assume every previous agent may be wrong.
+            Do not trust claims without evidence.
 
-            Inspect both the source code and dependency configuration.
+            DO NOT:
+            - modify application/source code
+            - merge
+            - silently accept failed validation
 
-            Do not invent vulnerabilities.
+            Independently verify:
+            - original task
+            - current diff
+            - every review finding
+            - every claimed fix
+            - tests
+            - build
+            - lint
+            - type checks
+            - important runtime behavior when practical
+            - regression risk
 
-            Only report findings supported by evidence.
+            Write .opencode-pipeline/verification.md.
 
-            Do not modify code.
+            At the end write exactly:
+            VERDICT: PASS
+            or
+            VERDICT: FAIL
 
-            If serious vulnerabilities are found,
-            create clear GitHub issues describing them.
+            If FAIL, provide actionable evidence-backed findings.
 
-      - name: 🧹 Cleanup credentials
-        if: always()
+      # ----------------------------------------------------------
+      # FINALIZER
+      # ----------------------------------------------------------
+      - name: 🏁 Finalizer Agent
+        if: steps.request.outputs.command == 'finalize'
+        uses: anomalyco/opencode/github@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        with:
+          model: ${{ inputs.model }}
+          use_github_token: true
+          agent: build
+          prompt: |
+            You are the FINALIZATION AGENT.
+
+            PR NUMBER: ${{ steps.request.outputs.pr }}
+
+            You are a gatekeeper, not an implementer.
+
+            DO NOT modify application/source code.
+            DO NOT merge.
+
+            Confirm independently that:
+            1. The original task is satisfied.
+            2. Review verdict is PASS.
+            3. Verification verdict is PASS.
+            4. No unresolved findings remain.
+            5. Required CI checks are successful.
+            6. The branch contains coherent changes.
+            7. The PR is not in conflict.
+            8. There is no known blocker.
+
+            If ANY condition is false:
+            - do not finalize
+            - record the blocker
+            - set the pipeline to the appropriate non-ready state
+
+            If ALL conditions are true:
+            - update state.json to READY_FOR_HUMAN
+            - set human_approval_required=true
+            - append evidence to history.md
+            - post a concise PR comment saying the PR is ready
+            - ask the human to reply exactly:
+
+              /oc merge
+
+            Never merge yourself.
+
+      # ----------------------------------------------------------
+      # RESUME
+      # ----------------------------------------------------------
+      - name: ▶️ Resume pipeline
+        if: steps.request.outputs.command == 'resume'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR: ${{ steps.request.outputs.pr }}
         run: |
-          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git" || true
-          rm -f ~/.git-credentials || true
+          set -euo pipefail
+
+          status="$(jq -r '.status // ""' "$OC_STATE")"
+
+          case "$status" in
+            STOPPED|BLOCKED|WAITING_HUMAN|READY_FOR_HUMAN|NEEDS_HUMAN)
+              jq '.status="RUNNING" | .stop_reason="" | .human_approval_required=false' \
+                "$OC_STATE" > "${OC_STATE}.tmp"
+              mv "${OC_STATE}.tmp" "$OC_STATE"
+
+              git add "$OC_STATE"
+              git commit -m "chore(oc): resume pipeline" || true
+              git push
+
+              gh pr comment "$PR" --body "▶️ Pipeline resumed by human. Re-entering orchestration."
+              ;;
+            *)
+              echo "Pipeline is already active: $status"
+              ;;
+          esac
+
+      # ----------------------------------------------------------
+      # POST-AGENT ORCHESTRATION
+      #
+      # This step is the deterministic state machine. Agents do not
+      # dispatch other agents themselves.
+      # ----------------------------------------------------------
+      - name: 🧠 Advance state machine
+        id: advance
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          PR: ${{ steps.request.outputs.pr }}
+          COMMAND: ${{ steps.request.outputs.command }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          set -euo pipefail
+
+          status="$(jq -r '.status // ""' "$OC_STATE")"
+
+          # Ensure state has the fields expected by the orchestrator.
+          jq '
+            .version = (.version // 1) |
+            .review_cycle = (.review_cycle // 0) |
+            .fix_cycle = (.fix_cycle // 0) |
+            .verify_cycle = (.verify_cycle // 0) |
+            .stagnation = (.stagnation // 0) |
+            .last_findings_fingerprint = (.last_findings_fingerprint // "") |
+            .last_verified_commit = (.last_verified_commit // "") |
+            .human_approval_required = (.human_approval_required // false) |
+            .stop_reason = (.stop_reason // "")
+          ' "$OC_STATE" > "${OC_STATE}.normalized"
+          mv "${OC_STATE}.normalized" "$OC_STATE"
+
+          next=""
+          reason=""
+
+          case "$COMMAND" in
+            build)
+              jq '.status="REVIEWING" | .phase="REVIEWING"' "$OC_STATE" > "${OC_STATE}.tmp"
+              mv "${OC_STATE}.tmp" "$OC_STATE"
+              next="review"
+              reason="Build completed; independent review required."
+              ;;
+
+            review)
+              if [[ -f "$OC_REVIEW" ]] &&
+                 grep -qE '^VERDICT:[[:space:]]*PASS[[:space:]]*$' "$OC_REVIEW"; then
+
+                jq '.status="VERIFYING" | .phase="VERIFYING" | .review_cycle += 1' \
+                  "$OC_STATE" > "${OC_STATE}.tmp"
+                mv "${OC_STATE}.tmp" "$OC_STATE"
+
+                next="verify"
+                reason="Review passed; independent verification required."
+              else
+                fingerprint="$(
+                  sed -E \
+                    '/^VERDICT:/d;
+                     /^Reviewed at:/d;
+                     /^Run:/d;
+                     /^Timestamp:/d' \
+                    "$OC_REVIEW" 2>/dev/null |
+                  tr -s '[:space:]' ' ' |
+                  sha256sum |
+                  awk '{print $1}'
+                )"
+
+                previous="$(jq -r '.last_findings_fingerprint // ""' "$OC_STATE")"
+
+                if [[ -n "$fingerprint" && "$fingerprint" == "$previous" ]]; then
+                  jq '
+                    .stagnation += 1 |
+                    .status="BLOCKED" |
+                    .phase="HUMAN_REQUIRED" |
+                    .stop_reason="The same review findings were reproduced without meaningful progress. Human intervention is required."
+                  ' "$OC_STATE" > "${OC_STATE}.tmp"
+                  mv "${OC_STATE}.tmp" "$OC_STATE"
+
+                  next=""
+                  reason="Stagnation detected; refusing to loop forever."
+                else
+                  jq \
+                    --arg fp "$fingerprint" \
+                    '.status="FIXING" |
+                     .phase="FIXING" |
+                     .review_cycle += 1 |
+                     .last_findings_fingerprint=$fp |
+                     .stagnation=0' \
+                    "$OC_STATE" > "${OC_STATE}.tmp"
+                  mv "${OC_STATE}.tmp" "$OC_STATE"
+
+                  next="fix"
+                  reason="Review found actionable issues."
+                fi
+              fi
+              ;;
+
+            fix)
+              jq '.status="VERIFYING" | .phase="VERIFYING" | .fix_cycle += 1' \
+                "$OC_STATE" > "${OC_STATE}.tmp"
+              mv "${OC_STATE}.tmp" "$OC_STATE"
+
+              next="verify"
+              reason="Fix agent completed; independent verification required."
+              ;;
+
+            verify)
+              if [[ -f "$OC_VERIFY" ]] &&
+                 grep -qE '^VERDICT:[[:space:]]*PASS[[:space:]]*$' "$OC_VERIFY"; then
+
+                commit="$(git rev-parse HEAD)"
+
+                jq \
+                  --arg commit "$commit" \
+                  '.status="FINALIZING" |
+                   .phase="FINALIZING" |
+                   .verify_cycle += 1 |
+                   .last_verified_commit=$commit' \
+                  "$OC_STATE" > "${OC_STATE}.tmp"
+                mv "${OC_STATE}.tmp" "$OC_STATE"
+
+                next="finalize"
+                reason="Independent verification passed."
+              else
+                jq '
+                  .status="REVIEWING" |
+                  .phase="REVIEWING" |
+                  .verify_cycle += 1
+                ' "$OC_STATE" > "${OC_STATE}.tmp"
+                mv "${OC_STATE}.tmp" "$OC_STATE"
+
+                next="review"
+                reason="Verification failed; return to independent review."
+              fi
+              ;;
+
+            finalize)
+              # The finalizer is allowed to declare READY_FOR_HUMAN only.
+              if jq -e '.status == "READY_FOR_HUMAN"' "$OC_STATE" >/dev/null 2>&1; then
+                next=""
+                reason="Pipeline is ready for explicit human merge approval."
+              else
+                next="review"
+                reason="Finalization did not prove merge readiness; re-enter review."
+              fi
+              ;;
+
+            resume)
+              # Re-enter at the safest point based on the durable evidence.
+              if [[ -f "$OC_VERIFY" ]] &&
+                 grep -qE '^VERDICT:[[:space:]]*PASS[[:space:]]*$' "$OC_VERIFY"; then
+                next="finalize"
+                reason="Resumed from a verified state."
+              elif [[ -f "$OC_REVIEW" ]]; then
+                next="review"
+                reason="Resumed from existing review context."
+              else
+                next="build"
+                reason="No sufficient prior evidence; resume through build."
+              fi
+              ;;
+
+            *)
+              echo "No automatic transition for command=$COMMAND status=$status"
+              ;;
+          esac
+
+          jq \
+            --arg status "$status" \
+            --arg command "$COMMAND" \
+            --arg reason "$reason" \
+            '.last_transition = {
+              "from_command": $command,
+              "observed_status": $status,
+              "reason": $reason
+            }' \
+            "$OC_STATE" > "${OC_STATE}.tmp"
+          mv "${OC_STATE}.tmp" "$OC_STATE"
+
+          git add "$OC_STATE"
+          git commit -m "chore(oc): advance pipeline state" || true
+          git push
+
+          if [[ -n "$reason" ]]; then
+            gh pr comment "$PR" --body "🤖 **Pipeline transition:** ${reason}"
+          fi
+
+          if [[ -n "$next" ]]; then
+            gh workflow run "$(basename "$GITHUB_WORKFLOW")" \
+              --ref "${{ github.ref_name }}" \
+              -f prompt="/oc-internal ${next} ${PR}" \
+              -f model="$MODEL"
+
+            echo "Dispatched: $next"
+          else
+            echo "Pipeline paused. No next agent dispatched."
+          fi
+
+  # ============================================================
+  # 4. SAFETY: NEVER MERGE FROM AN AGENT
+  #
+  # Merge is intentionally handled only by command_router after
+  # an explicit human /oc merge and a READY_FOR_HUMAN state.
+  # ============================================================
