@@ -449,6 +449,55 @@ function eatFood(idx) {
   return true;
 }
 
+function dropAllItems(){
+  var o=eyePos();
+  // Drop inventory slots
+  for(var i=0;i<45;i++){
+    var s=inv.slots[i];
+    if(!s) continue;
+    for(var c=0;c<s.count;c++){
+      pickups.push({
+        x:o[0]+(Math.random()-0.5)*2, y:o[1]+(Math.random()-0.5)*1.5, z:o[2]+(Math.random()-0.5)*2,
+        vx:(Math.random()-0.5)*5, vy:3+Math.random()*3, vz:(Math.random()-0.5)*5,
+        kind:invSlotName(s), nut:invSlotFood(s), t:0, col:invSlotRGB(s)
+      });
+      if(pickups.length>60) pickups.shift();
+    }
+    inv.slots[i]=null;
+  }
+  // Drop armor
+  var armorTypes=['helmet','chestplate','leggings','boots'];
+  for(var a=0;a<armorTypes.length;a++){
+    var s=inv.armor[armorTypes[a]];
+    if(!s) continue;
+    for(var c=0;c<s.count;c++){
+      pickups.push({
+        x:o[0]+(Math.random()-0.5)*2, y:o[1]+(Math.random()-0.5)*1.5, z:o[2]+(Math.random()-0.5)*2,
+        vx:(Math.random()-0.5)*5, vy:3+Math.random()*3, vz:(Math.random()-0.5)*5,
+        kind:invSlotName(s), nut:invSlotFood(s), t:0, col:invSlotRGB(s)
+      });
+      if(pickups.length>60) pickups.shift();
+    }
+    inv.armor[armorTypes[a]]=null;
+  }
+  // Drop cursor item
+  if(inv.cursor){
+    for(var c=0;c<inv.cursor.count;c++){
+      pickups.push({
+        x:o[0]+(Math.random()-0.5)*2, y:o[1]+(Math.random()-0.5)*1.5, z:o[2]+(Math.random()-0.5)*2,
+        vx:(Math.random()-0.5)*5, vy:3+Math.random()*3, vz:(Math.random()-0.5)*5,
+        kind:invSlotName(inv.cursor), nut:invSlotFood(inv.cursor), t:0, col:invSlotRGB(inv.cursor)
+      });
+      if(pickups.length>60) pickups.shift();
+    }
+    inv.cursor=null;
+  }
+  // Clear crafting grids
+  for(var i=0;i<inv.craft.length;i++) inv.craft[i]=null;
+  for(var i=0;i<inv.craft3x3.length;i++) inv.craft3x3[i]=null;
+  inv.dirty=true;
+}
+
 function getWeaponDamage() {
   var slot = inv.slots[selIndex];
   if (!slot || slot.type !== 'item') return 1; // bare hand
@@ -2115,7 +2164,7 @@ function damage(n){
   n = Math.max(1, Math.round(n * (1 - reduction)));
   health-=n; hurtTimer=0.6; flash(); sfxHurt();
   updateBars();
-  if(health<=0){ health=0; dead=true; updateBars(); showMsg('You died! Respawning...'); setTimeout(respawn,1500); }
+  if(health<=0){ health=0; dead=true; dropAllItems(); updateBars(); buildHotbar(); if(invOpen) buildInvGrid(); showMsg('You died! Respawning...'); setTimeout(respawn,1500); }
 }
 function respawn(){
   if(currentDimension==='nether'){
