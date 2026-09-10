@@ -2499,7 +2499,7 @@ function render(){
         gl.uniformMatrix4fv(uProjM,false,projMat);
         gl.uniformMatrix4fv(uViewM,false,viewMat);
         gl.uniform3f(uFogM,fogColor[0],fogColor[1],fogColor[2]);
-        gl.uniform1f(uFogNearM,26); gl.uniform1f(uFogFarM,80);
+        gl.uniform1f(uFogNearM,0); gl.uniform1f(uFogFarM,500);
         gl.uniform1f(uSunM,1.0);
         gl.bindBuffer(gl.ARRAY_BUFFER,selVBO);
         gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(starV),gl.DYNAMIC_DRAW);
