@@ -243,6 +243,7 @@ defTool(DIAM_SWORD,'Diamond Sword','sword','diamond',1,12,1562);
 defTool(NETHERITE_SWORD,'Netherite Sword','sword','netherite',1,14,2031);
 // Leather item
 var LEATHER=52;
+var BLAZE_ROD=58;
 // Armor IDs (36-51)
 var LEATHER_HELM=36, LEATHER_CHEST=37, LEATHER_LEGS=38, LEATHER_BOOTS=39;
 var IRON_HELM=40, IRON_CHEST=41, IRON_LEGS=42, IRON_BOOTS=43;
@@ -310,7 +311,7 @@ var RECIPES=[
   {result:{id:NETHERITE_LEGS,n:1},ing:[{id:DIAM,n:5},{id:NETHERRACK,n:4}]},
   {result:{id:NETHERITE_BOOTS,n:1},ing:[{id:DIAM,n:2},{id:NETHERRACK,n:4}]}
 ];
-function getItemName(id){ if(TOOLS[id]) return TOOLS[id].name; if(ARMOR[id]) return ARMOR[id].name; if(id===LEATHER) return 'Leather'; if(BLOCKS[id]) return BLOCKS[id].name; return 'Unknown'; }
+function getItemName(id){ if(TOOLS[id]) return TOOLS[id].name; if(ARMOR[id]) return ARMOR[id].name; if(id===LEATHER) return 'Leather'; if(id===BLAZE_ROD) return 'Blaze Rod'; if(BLOCKS[id]) return BLOCKS[id].name; return 'Unknown'; }
 function isTool(id){ return !!TOOLS[id]; }
 // Inventory: 36 slots (0-8 = hotbar, 9-35 = main inventory)
 var inv=[];
@@ -1096,6 +1097,7 @@ var player={ x:0.5,y:30,z:0.5, vx:0,vy:0,vz:0, yaw:Math.PI*0.25, pitch:-0.05, on
 var spawnPt={x:0.5,z:0.5};
 var keys={};
 var health=20, hunger=20, hungerTimer=0, hurtTimer=0, drownTimer=0, dead=false, kills=0;
+var witherTimer=0, witherTick=0;
 
 function collideBox(nx,ny,nz,hw,hh){
   var minX=nx-hw, maxX=nx+hw, minY=ny, maxY=ny+hh, minZ=nz-hw, maxZ=nz+hw;
@@ -1199,7 +1201,7 @@ function respawn(){
   }
   var sy=surfaceY(spawnPt.x, spawnPt.z);
   player.x=spawnPt.x; player.z=spawnPt.z; player.y=(sy>0?sy:H-2)+1.01;
-  player.vx=player.vy=player.vz=0; health=20; hunger=20; dead=false; updateBars();
+  player.vx=player.vy=player.vz=0; health=20; hunger=20; dead=false; witherTimer=0; witherTick=0; updateBars();
 }
 function flash(){ var el=document.getElementById('damage-flash'); el.style.opacity=1; setTimeout(function(){el.style.opacity=0;},180); }
 // ---------- Armor System ----------
@@ -1386,12 +1388,15 @@ var MOB_DEFS={
   zombie: {name:'Zombie', hp:20, spd:2.6, dmg:4, hostile:true, hw:0.35, hh:1.8, body:[0.25,0.5,0.3], head:[0.35,0.65,0.4], drop:['Rotten Flesh',1]},
   skeleton:{name:'Skeleton', hp:16, spd:3.0, dmg:3, hostile:true, hw:0.35, hh:1.8, body:[0.8,0.8,0.75], head:[0.9,0.9,0.85], drop:['Bone',1]},
   spider: {name:'Spider', hp:16, spd:3.6, dmg:3, hostile:true, hw:0.5, hh:0.9, body:[0.25,0.12,0.12], head:[0.35,0.15,0.15], drop:['String',1]},
-  creeper:{name:'Creeper', hp:20, spd:2.4, dmg:0, hostile:true, hw:0.35, hh:1.6, body:[0.25,0.7,0.25], head:[0.3,0.75,0.3], drop:['Gunpowder',0]}
+  creeper:{name:'Creeper', hp:20, spd:2.4, dmg:0, hostile:true, hw:0.35, hh:1.6, body:[0.25,0.7,0.25], head:[0.3,0.75,0.3], drop:['Gunpowder',0]},
+  blaze:  {name:'Blaze', hp:20, spd:2.8, dmg:6, hostile:true, hw:0.35, hh:1.8, body:[1.0,0.7,0.0], head:[1.0,0.9,0.2], drop:['Blaze Rod',0]},
+  witherskeleton:{name:'Wither Skeleton', hp:20, spd:2.4, dmg:5, hostile:true, hw:0.35, hh:1.8, body:[0.2,0.2,0.2], head:[0.1,0.1,0.1], drop:['Bone',1]}
 };
 var DROP_INFO={'Porkchop':{c:[1,0.55,0.6],nut:5},'Beef':{c:[0.6,0.3,0.2],nut:4},
   'Mutton':{c:[0.8,0.45,0.4],nut:3},'Feather':{c:[0.95,0.95,0.95],nut:1},
-  'Rotten Flesh':{c:[0.5,0.6,0.4],nut:1},'Bone':{c:[0.9,0.9,0.85],nut:1},
-  'String':{c:[0.85,0.85,0.85],nut:1},'Gunpowder':{c:[0.3,0.3,0.3],nut:0}};
+  'Rotten Flesh':{c:[0.5,0.6,0.4],nut:1},'Bone':{c:[0.9,0.9,0.85],nut:1,blockId:0,blockCount:1},
+  'String':{c:[0.85,0.85,0.85],nut:1},'Gunpowder':{c:[0.3,0.3,0.3],nut:0},
+  'Blaze Rod':{c:[1.0,0.7,0.1],nut:0,blockId:BLAZE_ROD,blockCount:1},'Coal':{c:[0.3,0.3,0.3],nut:0,blockId:COAL,blockCount:1}};
 var mobs=[], pickups=[], mobId=1;
 var spawnTimer=0;
 
@@ -1410,13 +1415,24 @@ function trySpawn(dt){
   spawnTimer-=dt;
   if(spawnTimer>0) return;
   spawnTimer=2.5;
-  if(currentDimension==='nether') return;
-  var night = !(timeOfDay>0.25&&timeOfDay<0.75);
   // despawn far
   for(var i=mobs.length-1;i>=0;i--){
     var dx=mobs[i].x-player.x, dz=mobs[i].z-player.z;
     if(dx*dx+dz*dz>56*56) mobs.splice(i,1);
   }
+  if(currentDimension==='nether'){
+    if(mobCount(true)>=8) return;
+    var ang=Math.random()*Math.PI*2, r=12+Math.random()*12;
+    var sx=player.x+Math.cos(ang)*r, sz=player.z+Math.sin(ang)*r;
+    var sy=surfaceY(sx,sz);
+    if(sy<0) return;
+    var bid=getBlock(Math.floor(sx),sy,Math.floor(sz));
+    if(bid!==NETHERRACK&&bid!==SOULSAND) return;
+    var table=['blaze','blaze','witherskeleton','witherskeleton','witherskeleton'];
+    spawnMob(table[Math.floor(Math.random()*table.length)], sx, sy+1.01, sz);
+    return;
+  }
+  var night = !(timeOfDay>0.25&&timeOfDay<0.75);
   if(mobs.length>22) return;
   var ang=Math.random()*Math.PI*2, r=14+Math.random()*12;
   var sx=player.x+Math.cos(ang)*r, sz=player.z+Math.sin(ang)*r;
@@ -1461,6 +1477,13 @@ function hurtMob(m, dmg, kx, kz){
         kind:'Leather', nut:0, t:0, col:[0.55,0.35,0.15], blockId:LEATHER, blockCount:1});
       if(pickups.length>30) pickups.shift();
     }
+    // Wither Skeleton also drops Coal (0-1)
+    if(m.type==='witherskeleton' && Math.random()<0.5){
+      pickups.push({x:m.x+(Math.random()-0.5)*0.5,y:m.y+0.6,z:m.z+(Math.random()-0.5)*0.5,
+        vx:(Math.random()-0.5)*3,vy:4,vz:(Math.random()-0.5)*3,
+        kind:'Coal', nut:0, t:0, col:[0.3,0.3,0.3], blockId:COAL, blockCount:1});
+      if(pickups.length>30) pickups.shift();
+    }
     showMsg(d.name+' slain! ('+kills+' kills)');
   } else if(!MOB_DEFS[m.type].hostile){
     m.yaw=Math.atan2(-kx,-kz); // flee: turn away (approx)
@@ -1497,7 +1520,7 @@ function updateMobs(dt){
     m.bob+=dt*8;
     var dx=player.x-m.x, dz=player.z-m.z;
     var dist=Math.hypot(dx,dz);
-    var hostile=d.hostile && (night || m.type==='spider' || dist<6);
+    var hostile=d.hostile && (night || m.type==='spider' || dist<6 || m.type==='blaze' || m.type==='witherskeleton');
     var mvx=0, mvz=0, spd=d.spd;
     if(m.type==='creeper' && dist<3.2 && Math.abs(player.y-m.y)<3){
       if(m.fuse<0){ m.fuse=1.1; tone(800,0.3,'sine',0.2,1200); }
@@ -1512,6 +1535,7 @@ function updateMobs(dt){
       else if(m.atkCd<=0 && Math.abs(player.y-m.y)<2.5){
         m.atkCd=1.0;
         damage(d.dmg);
+        if(m.type==='witherskeleton'){ witherTimer=4.0; witherTick=0; }
         // lunge + knock player slightly
         var pl=Math.max(0.01,dist);
         player.vx+=dx/pl*-3; player.vz+=dz/pl*-3;
@@ -1547,6 +1571,18 @@ function updateMobs(dt){
       if(m.onG&&m.jumpCd<=0&&(mvx||mvz)){ m.vy=7.6; m.jumpCd=0.5; } else m.yaw+=1.2*dt*3; }
     m.z=nzz;
     if(m.y<-12){ m.dead=true; mobs.splice(i,1); }
+  }
+  // Wither effect tick
+  if(witherTimer>0 && !dead){
+    witherTimer-=dt;
+    witherTick+=dt;
+    if(witherTick>=0.5){
+      witherTick-=0.5;
+      health=Math.max(0,health-1);
+      flash();
+      updateBars();
+      if(health<=0){ dead=true; showMsg('You died! Respawning...'); setTimeout(respawn,1500); }
+    }
   }
   // pickups physics + magnet
   for(var p=pickups.length-1;p>=0;p--){
@@ -1654,6 +1690,21 @@ function renderMobsEtc(){
     // eyes (dark) on head front
     var ex=-Math.sin(m.yaw)*headS*0.5, ez=-Math.cos(m.yaw)*headS*0.5;
     pushBox(arr,m.x+lx+ex,hy+headS*0.55,m.z+lz+ez, headS*0.7,headS*0.18,0.03, m.yaw, 0.05,0.05,0.05);
+    // Blaze fire particles
+    if(m.type==='blaze'){
+      var pd=Math.hypot(player.x-m.x,player.z-m.z);
+      if(pd<12){
+        for(var fp=0;fp<3;fp++){
+          var fa=t*6+fp*2.1;
+          var fx=m.x+Math.sin(fa)*0.6;
+          var fy=m.y+bobY+0.3+Math.abs(Math.sin(fa*1.3))*1.2;
+          var fz=m.z+Math.cos(fa)*0.6;
+          var fs=0.08+Math.sin(fa*2)*0.04;
+          var fb=0.7+Math.sin(fa*3)*0.3;
+          pushBox(arr,fx,fy,fz, fs,fs*1.5,fs, 0, fb,fb*0.4,0);
+        }
+      }
+    }
   }
   for(var p=0;p<pickups.length;p++){
     var it=pickups[p], di=DROP_INFO[it.kind];
@@ -1975,7 +2026,7 @@ document.addEventListener('pointerlockchange', function(){
 });
 // ---------- Inventory (E) & dropping (Q) ----------
 var BLOCK_RGB={1:[0.42,0.75,0.19],2:[0.54,0.37,0.24],3:[0.55,0.55,0.55],4:[0.42,0.29,0.16],5:[0.25,0.49,0.17],6:[0.89,0.84,0.61],7:[0.65,0.49,0.23],8:[0.81,0.91,0.96],9:[0.64,0.29,0.23],10:[0.2,0.47,0.86],11:[0.3,0.3,0.3],12:[0.85,0.63,0.48],13:[0.96,0.84,0.26],14:[0.43,0.95,0.95],15:[0.95,0.97,0.97],16:[0.25,0.57,0.25],17:[0.55,0.1,0.06],18:[0.5,0.2,0.8],19:[0.1,0.05,0.18],20:[0.42,0.3,0.15],21:[1.0,0.75,0.1],22:[1.0,0.5,0.0]};
-var TOOL_RGB={}; TOOL_RGB[STICK]=[0.55,0.35,0.15]; TOOL_RGB[LEATHER]=[0.55,0.35,0.15];
+var TOOL_RGB={}; TOOL_RGB[STICK]=[0.55,0.35,0.15]; TOOL_RGB[LEATHER]=[0.55,0.35,0.15]; TOOL_RGB[BLAZE_ROD]=[1.0,0.7,0.1];
 var _tm={wood:[0.55,0.42,0.1],stone:[0.55,0.55,0.55],iron:[0.8,0.8,0.8],diamond:[0.3,0.85,0.9],netherite:[0.25,0.2,0.3],leather:[0.55,0.35,0.15]};
 [WOOD_PICK,WOOD_AXE,WOOD_SHOVEL].forEach(function(id){TOOL_RGB[id]=_tm.wood;});
 [STONE_PICK,STONE_AXE,STONE_SHOVEL].forEach(function(id){TOOL_RGB[id]=_tm.stone;});
