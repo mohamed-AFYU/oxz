@@ -76,6 +76,9 @@
   /* Navigation toast */
   #nav-toast { position:absolute; bottom:100px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.8); color:#fff; padding:10px 20px; border-radius:8px; font:14px sans-serif; z-index:35; pointer-events:none; opacity:0; transition:opacity .3s; white-space:nowrap; }
   #nav-toast.show { opacity:1; }
+  #weather-btn { position:absolute; top:108px; right:10px; z-index:40; pointer-events:auto; cursor:pointer; background:rgba(0,0,0,.55); color:#fff; padding:6px 14px; border:2px solid rgba(255,255,255,.35); border-radius:6px; font-size:13px; font-family:monospace; transition:background .15s, border-color .15s; user-select:none; }
+  #weather-btn:hover { background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.6); }
+  #weather-btn:active { transform:scale(0.95); }
 
   /* Inventory System */
   #inv-tooltip { position:fixed; z-index:100; background:rgba(20,20,20,.95); border:2px solid #666; border-radius:4px; padding:6px 10px; color:#fff; font:12px/1.4 monospace; pointer-events:none; white-space:nowrap; display:none; }
@@ -119,6 +122,7 @@
   <div id="selected-label">Grass</div>
   <div id="time-label">Day 1 08:00</div>
   <div id="biome-label">Plains</div>
+  <div id="weather-btn" title="Cycle weather (M)">☀ Clear</div>
   <div id="stats">
     <div class="bar" id="health"></div>
     <div class="bar" id="hunger"></div>
@@ -2017,10 +2021,14 @@ function renderMobsEtc(){
   gl.drawArrays(gl.TRIANGLES,0,arr.length/6);
 }
 
-// ---------- Weather (rain / snow) ----------
+// ---------- Weather (rain / snow / storm) ----------
 var weather={type:'clear', t:0, dur:25};
+var weatherManual=false;
+var WEATHER_STATES=['clear','rain','snow','storm'];
+var WEATHER_ICONS={clear:'☀',rain:'🌧',snow:'🌨',storm:'⛈'};
+var WEATHER_LABELS={clear:'Clear',rain:'Rain',snow:'Snow',storm:'Storm'};
 var drops=[];
-for(var wdi=0;wdi<160;wdi++) drops.push({x:0,y:0,z:0,v:0});
+for(var wdi=0;wdi<240;wdi++) drops.push({x:0,y:0,z:0,v:0});
 function resetDrop(d, init){
   d.x=player.x+(Math.random()-0.5)*28;
   d.z=player.z+(Math.random()-0.5)*28;
@@ -2029,25 +2037,44 @@ function resetDrop(d, init){
 }
 for(var wdi2=0;wdi2<drops.length;wdi2++) resetDrop(drops[wdi2], true);
 var weatherVBO=gl.createBuffer();
+var lightningFlash=0;
+function cycleWeather(){
+  var idx=WEATHER_STATES.indexOf(weather.type);
+  weather.type=WEATHER_STATES[(idx+1)%WEATHER_STATES.length];
+  weatherManual=true;
+  updateWeatherBtn();
+  showMsg('Weather: '+WEATHER_LABELS[weather.type]);
+}
+function updateWeatherBtn(){
+  var btn=document.getElementById('weather-btn');
+  if(btn) btn.textContent=WEATHER_ICONS[weather.type]+' '+WEATHER_LABELS[weather.type];
+}
 function updateWeather(dt){
-  if(currentDimension==='nether'){ weather.type='clear'; return; }
-  weather.t+=dt;
-  if(weather.t>weather.dur){
-    weather.t=0; weather.dur=25+Math.random()*35;
-    var b=biomeAt(Math.floor(player.x),Math.floor(player.z));
-    var r=Math.random();
-    if(b.biome==='snow') weather.type = r<0.5?'snow':'clear';
-    else if(b.biome==='desert'||b.biome==='ocean'||b.biome==='beach') weather.type = r<0.12?'rain':'clear';
-    else weather.type = r<0.38?'rain':'clear';
+  if(currentDimension==='nether'){ weather.type='clear'; updateWeatherBtn(); return; }
+  if(!weatherManual){
+    weather.t+=dt;
+    if(weather.t>weather.dur){
+      weather.t=0; weather.dur=25+Math.random()*35;
+      var b=biomeAt(Math.floor(player.x),Math.floor(player.z));
+      var r=Math.random();
+      if(b.biome==='snow') weather.type = r<0.5?'snow':'clear';
+      else if(b.biome==='desert'||b.biome==='ocean'||b.biome==='beach') weather.type = r<0.12?'rain':'clear';
+      else weather.type = r<0.38?'rain':'clear';
+      updateWeatherBtn();
+    }
   }
   if(rainGain){
     try{
-      var target=(weather.type==='rain')?0.12:0;
+      var target=(weather.type==='rain')?0.12:(weather.type==='storm')?0.2:0;
       rainGain.gain.value += (target-rainGain.gain.value)*Math.min(1,2*dt);
     }catch(e){}
   }
+  if(weather.type==='storm'){
+    lightningFlash=Math.max(0,lightningFlash-dt*4);
+    if(Math.random()<dt*0.3){ lightningFlash=1; }
+  } else { lightningFlash=0; }
   var label=document.getElementById('time-label');
-  var icon=weather.type==='rain'?'🌧 ':weather.type==='snow'?'🌨 ':'';
+  var icon=WEATHER_ICONS[weather.type]||'';
   var isDay=(timeOfDay>0.25&&timeOfDay<0.75);
   var dayNum=Math.floor(perfTime/DAY_LEN)+1;
   var hh2=Math.floor(timeOfDay*24), mm=Math.floor((timeOfDay*24-hh2)*60);
@@ -2056,14 +2083,18 @@ function updateWeather(dt){
 function renderWeather(){
   if(weather.type==='clear') return;
   var arr=[];
-  var rain=weather.type==='rain';
-  for(var i=0;i<drops.length;i++){
+  var rain=weather.type==='rain'||weather.type==='storm';
+  var storm=weather.type==='storm';
+  var dropCount=storm?drops.length:rain?160:drops.length;
+  for(var i=0;i<dropCount;i++){
     var d=drops[i];
-    d.y-=(rain?22:2.2)*0.016;
+    var speed=rain?(storm?30:22):2.2;
+    d.y-=speed*0.016;
     d.x+=(rain?-2:Math.sin(perfTime+i)*0.5)*0.016;
+    if(storm) d.x-=4*0.016;
     if(d.y<player.y-2) resetDrop(d,false);
     if(Math.abs(d.x-player.x)>15||Math.abs(d.z-player.z)>15) resetDrop(d,false);
-    if(rain) arr.push(d.x,d.y,d.z, d.x+0.08,d.y+0.9,d.z);
+    if(rain) arr.push(d.x,d.y,d.z, d.x+0.08,d.y+(storm?1.2:0.9),d.z);
     else{
       var s=0.07;
       arr.push(d.x-s,d.y,d.z, d.x+s,d.y,d.z, d.x,d.y-s,d.z, d.x,d.y+s,d.z);
@@ -2076,8 +2107,12 @@ function renderWeather(){
   gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(arr),gl.DYNAMIC_DRAW);
   gl.enableVertexAttribArray(aPosF);
   gl.vertexAttribPointer(aPosF,3,gl.FLOAT,false,0,0);
-  if(rain){ gl.uniform4f(uColF,0.6,0.72,1.0,0.55); gl.drawArrays(gl.LINES,0,arr.length/3); }
+  if(rain){ gl.uniform4f(uColF,0.6,0.72,1.0,storm?0.7:0.55); gl.drawArrays(gl.LINES,0,arr.length/3); }
   else { gl.uniform4f(uColF,1,1,1,0.9); gl.drawArrays(gl.LINES,0,arr.length/3); }
+  if(lightningFlash>0){
+    gl.clearColor(lightningFlash,lightningFlash,lightningFlash*0.95,1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
 }
 
 // ---------- Clouds ----------
@@ -2223,10 +2258,15 @@ document.addEventListener('keydown', function(e){
   else if(e.code==='KeyN'){ cycleWaypoint(); }
   else if(e.code==='KeyG'){ teleportToGround(); }
   else if(e.code==='KeyX'){ if(waypoints.length>0){ removeWaypoint(waypoints.length-1); } }
+  else if(e.code==='KeyM'){ cycleWeather(); }
   // Only prevent the single default that interferes with locked play (page scroll on Space).
   if(e.code==='Space') e.preventDefault();
 });
 document.addEventListener('keyup', function(e){ keys[e.code]=false; });
+document.getElementById('weather-btn').addEventListener('click', function(e){
+  e.stopPropagation();
+  cycleWeather();
+});
 document.addEventListener('mousemove', function(e){
   if(!locked||!playing) return;
   player.yaw -= e.movementX*0.0024;
@@ -2641,6 +2681,18 @@ function updateSky(dt){
     else skyColor=[0.55,0.75,1.0];
     fogColor=[skyColor[0],skyColor[1],skyColor[2]];
   }
+  if(currentDimension!=='nether'){
+    if(weather.type==='rain'){
+      skyColor[0]*=0.7; skyColor[1]*=0.7; skyColor[2]*=0.8;
+      fogColor[0]*=0.7; fogColor[1]*=0.7; fogColor[2]*=0.8;
+    } else if(weather.type==='storm'){
+      skyColor[0]*=0.45; skyColor[1]*=0.45; skyColor[2]*=0.55;
+      fogColor[0]*=0.45; fogColor[1]*=0.45; fogColor[2]*=0.55;
+    } else if(weather.type==='snow'){
+      skyColor[0]*=0.85; skyColor[1]*=0.85; skyColor[2]*=0.9;
+      fogColor[0]*=0.85; fogColor[1]*=0.85; fogColor[2]*=0.9;
+    }
+  }
 }
 var ambientT=3;
 function updateAmbient(dt){
@@ -2716,7 +2768,7 @@ function loop(){
     var fps=Math.round(fpsFrames/fpsTime);
     fpsEl.childNodes[0].textContent='FPS: '+fps+' | '+chunks.size+' chunks';
     var b=biomeAt(Math.floor(player.x),Math.floor(player.z));
-    document.getElementById('biome-label').textContent=(currentDimension==='nether'?'Nether':BIOME_NAMES[b.biome])+(weather.type!=='clear'?(weather.type==='rain'?' 🌧':' 🌨'):'');
+    document.getElementById('biome-label').textContent=(currentDimension==='nether'?'Nether':BIOME_NAMES[b.biome])+(weather.type!=='clear'?' '+WEATHER_ICONS[weather.type]:'');
     coordsEl.textContent='XYZ: '+player.x.toFixed(1)+' / '+player.y.toFixed(1)+' / '+player.z.toFixed(1)+(player.fly?' [FLY]':'')+' | Mobs: '+mobs.length+' Kills: '+kills;
     fpsFrames=0; fpsTime=0;
   }
