@@ -1,7 +1,7 @@
 {
   "task": "عايز دراسه وتحسين الجرافيك وجعله افضل بكثير",
   "max_cycles": 30,
-  "cycle": 0,
+  "cycle": 1,
   "status": "issues_found",
   "findings": [
     {
