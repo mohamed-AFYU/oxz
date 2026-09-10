@@ -259,26 +259,17 @@ var selIndex = 0;
 
 // ---------- Item definitions (non-block items) ----------
 var ITEMS = {
-  'Porkchop':    {name:'Porkchop',    color:[1,0.55,0.6],  maxStack:64, food:5, edible:true},
-  'Beef':        {name:'Beef',        color:[0.6,0.3,0.2], maxStack:64, food:4, edible:true},
-  'Mutton':      {name:'Mutton',      color:[0.8,0.45,0.4],maxStack:64, food:3, edible:true},
-  'Feather':     {name:'Feather',     color:[0.95,0.95,0.95],maxStack:64, food:0, edible:false},
-  'Rotten Flesh':{name:'Rotten Flesh',color:[0.5,0.6,0.4], maxStack:64, food:1, edible:true},
-  'Bone':        {name:'Bone',        color:[0.9,0.9,0.85],maxStack:64, food:0, edible:false},
-  'String':      {name:'String',      color:[0.85,0.85,0.85],maxStack:64, food:0, edible:false},
-  'Gunpowder':   {name:'Gunpowder',   color:[0.3,0.3,0.3], maxStack:64, food:0, edible:false},
-  'Stick':       {name:'Stick',       color:[0.55,0.4,0.22],maxStack:64, food:0, edible:false},
-  'Torch':       {name:'Torch',       color:[1,0.85,0.3],  maxStack:64, food:0, edible:false},
+  'Porkchop':    {name:'Porkchop',    color:[1,0.55,0.6],  maxStack:64, food:5},
+  'Beef':        {name:'Beef',        color:[0.6,0.3,0.2], maxStack:64, food:4},
+  'Mutton':      {name:'Mutton',      color:[0.8,0.45,0.4],maxStack:64, food:3},
+  'Feather':     {name:'Feather',     color:[0.95,0.95,0.95],maxStack:64, food:0},
+  'Rotten Flesh':{name:'Rotten Flesh',color:[0.5,0.6,0.4], maxStack:64, food:1},
+  'Bone':        {name:'Bone',        color:[0.9,0.9,0.85],maxStack:64, food:0},
+  'String':      {name:'String',      color:[0.85,0.85,0.85],maxStack:64, food:0},
+  'Gunpowder':   {name:'Gunpowder',   color:[0.3,0.3,0.3], maxStack:64, food:0},
+  'Stick':       {name:'Stick',       color:[0.55,0.4,0.22],maxStack:64, food:0},
+  'Torch':       {name:'Torch',       color:[1,0.85,0.3],  maxStack:64, food:0},
 };
-
-// ---------- Crafting recipes ----------
-var RECIPES = [
-  {in:[{type:'block',id:LOG,count:1}], out:{type:'block',id:PLANK,count:4}},
-  {in:[{type:'block',id:PLANK,count:2}], out:{type:'item',id:'Stick',count:4}},
-  {in:[{type:'block',id:PLANK,count:1},{type:'block',id:COAL,count:1}], out:{type:'item',id:'Torch',count:4}},
-];
-// Also allow any LOG type -> planks
-// Handled in checkCrafting with special logic
 
 // ---------- Inventory System ----------
 var inv = {
@@ -375,52 +366,6 @@ function invAdd(type, id, count) {
   return true;
 }
 
-function invRemove(type, id, count) {
-  var remaining = count;
-  for (var i = inv.slots.length - 1; i >= 0 && remaining > 0; i--) {
-    var s = inv.slots[i];
-    if (s && s.type === type && s.id === id) {
-      var take = Math.min(remaining, s.count);
-      s.count -= take;
-      remaining -= take;
-      if (s.count <= 0) inv.slots[i] = null;
-    }
-  }
-  inv.dirty = true;
-  syncInvToHotbar();
-  return remaining <= 0;
-}
-
-function invCount(type, id) {
-  var total = 0;
-  for (var i = 0; i < inv.slots.length; i++) {
-    var s = inv.slots[i];
-    if (s && s.type === type && s.id === id) total += s.count;
-  }
-  return total;
-}
-
-function invCountSlot(idx) {
-  var s = inv.slots[idx];
-  return s ? s.count : 0;
-}
-
-function invCurrentBlock() {
-  var s = inv.slots[selIndex];
-  if (s && s.type === 'block') return s.id;
-  return HOTBAR[selIndex];
-}
-
-function invConsumeCurrent() {
-  var s = inv.slots[selIndex];
-  if (!s) return false;
-  s.count--;
-  if (s.count <= 0) inv.slots[selIndex] = null;
-  inv.dirty = true;
-  syncInvToHotbar();
-  return true;
-}
-
 function syncInvToHotbar() {
   for (var i = 0; i < 9; i++) {
     var s = inv.slots[i];
@@ -451,35 +396,12 @@ function checkCrafting() {
   if (c[0] && c[0].type==='block' && c[0].id===PLANK && c[1] && c[1].type==='block' && c[1].id===COAL && !c[2] && !c[3]) {
     inv.craft[4] = makeSlot('item', 'Torch', 4); return;
   }
-  // Custom recipe matching
-  for (var r = 0; r < RECIPES.length; r++) {
-    var recipe = RECIPES[r];
-    if (recipe.out.type === 'item' && recipe.out.id === 'Torch') continue; // handled above
-    var counts = {};
-    for (var k = 0; k < 4; k++) {
-      if (c[k]) {
-        var key = c[k].type+':'+c[k].id;
-        counts[key] = (counts[key]||0) + c[k].count;
-      }
-    }
-    var need = {};
-    for (var j = 0; j < recipe.in.length; j++) {
-      var n = recipe.in[j];
-      var key = n.type+':'+n.id;
-      need[key] = (need[key]||0) + n.count;
-    }
-    var ok = true;
-    for (var key in need) {
-      if ((counts[key]||0) < need[key]) { ok = false; break; }
-    }
-    if (ok) { inv.craft[4] = makeSlot(recipe.out.type, recipe.out.id, recipe.out.count); return; }
-  }
 }
 
 // ---------- Inventory persistence ----------
 function saveInv() {
   try {
-    var data = { slots: inv.slots, craft: [inv.craft[0],inv.craft[1],inv.craft[2],inv.craft[3]] };
+    var data = { slots: inv.slots.slice(), craft: [inv.craft[0],inv.craft[1],inv.craft[2],inv.craft[3]] };
     localStorage.setItem('vc_inv', JSON.stringify(data));
   } catch(e) {}
 }
@@ -490,7 +412,9 @@ function loadInv() {
       for (var i = 0; i < d.slots.length; i++) {
         var s = d.slots[i];
         if (s && (s.type !== 'block' && s.type !== 'item')) { d.slots[i] = null; continue; }
-        if (s && (!s.id && s.id !== 0 || typeof s.count !== 'number' || s.count < 1)) { d.slots[i] = null; }
+        if (s && (!s.id && s.id !== 0 || typeof s.count !== 'number' || s.count < 1)) { d.slots[i] = null; continue; }
+        if (s && s.type === 'block' && !BLOCKS[s.id]) { d.slots[i] = null; continue; }
+        if (s && s.type === 'item' && !ITEMS[s.id]) { d.slots[i] = null; }
       }
       inv.slots = d.slots;
       if (d.craft) { inv.craft[0]=d.craft[0]||null; inv.craft[1]=d.craft[1]||null; inv.craft[2]=d.craft[2]||null; inv.craft[3]=d.craft[3]||null; }
@@ -1654,6 +1578,8 @@ function respawn(){
   var sy=surfaceY(spawnPt.x, spawnPt.z);
   player.x=spawnPt.x; player.z=spawnPt.z; player.y=(sy>0?sy:H-2)+1.01;
   player.vx=player.vy=player.vz=0; health=20; hunger=20; dead=false; updateBars();
+  buildHotbar();
+  if(invOpen) buildInvGrid();
 }
 function flash(){ var el=document.getElementById('damage-flash'); el.style.opacity=1; setTimeout(function(){el.style.opacity=0;},180); }
 var msgT=null;
@@ -2280,7 +2206,13 @@ function closeInventory(relock){
   invOpen=false;
   // Return cursor item to inventory or drop
   if(inv.cursor){
-    invAdd(inv.cursor.type, inv.cursor.id, inv.cursor.count);
+    if(!invAdd(inv.cursor.type, inv.cursor.id, inv.cursor.count)){
+      var dir=lookDir(), o=eyePos();
+      pickups.push({x:o[0]+dir[0]*1.2, y:o[1]+dir[1]*0.9, z:o[2]+dir[2]*1.2,
+        vx:dir[0]*4, vy:3, vz:dir[2]*4, kind:invSlotName(inv.cursor),
+        nut:invSlotFood(inv.cursor), t:0, col:invSlotRGB(inv.cursor)});
+      showMsg('Dropped '+invSlotName(inv.cursor));
+    }
     inv.cursor=null;
     updateCursor();
   }
