@@ -214,7 +214,7 @@ var overworldChunks = null;
 var netherChunks = new Map();
 var overworldPortalPos = null;
 var netherPortalPos = null;
-var portalTimer = 0;
+var portalTimer = 0, portalCooldown = 0;
 
 // ---------- Deterministic integer hash noise ----------
 function hashI(x, y, z){
@@ -537,7 +537,15 @@ function switchDimension(){
       player.y=(sy>0?sy:H-2)+1.01;
     }
   }
-  player.vx=player.vy=player.vz=0; portalTimer=0;
+  player.vx=player.vy=player.vz=0; portalTimer=0; portalCooldown=3.0;
+  // Unload distant chunks from inactive dimension
+  var pc=chunkCoords(player.x, player.z);
+  var inactiveChunks=(currentDimension==='nether')?overworldChunks:netherChunks;
+  var todel=[];
+  inactiveChunks.forEach(function(c,k){
+    if(Math.max(Math.abs(c.cx-pc[0]),Math.abs(c.cz-pc[1]))>UNLOAD_R) todel.push(k);
+  });
+  for(var i=0;i<todel.length;i++){ freeChunk(inactiveChunks.get(todel[i])); inactiveChunks.delete(todel[i]); }
   updateStreaming(true);
   showMsg('Entered the '+(currentDimension==='nether'?'Nether':'Overworld')+'!');
 }
@@ -948,7 +956,7 @@ function movePlayer(dt){
   if(headInWater()){ drownTimer+=dt; if(drownTimer>2.5){ drownTimer=0; damage(2); flash(); showMsg('You are drowning! Swim up!'); } }
   else drownTimer=Math.max(0,drownTimer-dt*2);
   var inLava=getBlock(Math.floor(player.x),Math.floor(player.y+0.4),Math.floor(player.z))===LAVA;
-  if(inLava){ damage(2); flash(); }
+  if(inLava){ damage(2); }
   if(hurtTimer>0) hurtTimer-=dt;
 }
 function damage(n){
@@ -1004,6 +1012,7 @@ function doBreak(){
   if(!hit) return;
   if(hit.y===0){ showMsg('Cannot break bedrock'); return; }
   var id=hit.id;
+  if(id===OBSIDIAN||id===NPORTAL){ showMsg('Cannot break obsidian or portal blocks'); return; }
   setBlock(hit.x,hit.y,hit.z,AIR);
   sfxBreak(); swingHand();
   if(ORE_NAMES[id]){ showMsg(ORE_NAMES[id]+' ore mined!'); hunger=Math.min(20,hunger+0.5); updateBars(); }
@@ -1938,8 +1947,9 @@ function loop(){
       updateAmbient(dt);
       // Portal detection
       var pbx=Math.floor(player.x), pby=Math.floor(player.y+0.5), pbz=Math.floor(player.z);
+      if(portalCooldown>0) portalCooldown-=dt;
       if(getBlock(pbx,pby,pbz)===NPORTAL||getBlock(pbx,pby-1,pbz)===NPORTAL){
-        portalTimer+=dt;
+        if(portalCooldown<=0){ portalTimer+=dt; }
         if(portalTimer>2.0){ switchDimension(); }
       } else { portalTimer=Math.max(0,portalTimer-dt*2); }
       if(atkCd>0) atkCd-=dt;
