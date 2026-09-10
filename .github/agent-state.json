@@ -2,7 +2,38 @@
   "task": "عايز دراسه وتحسين الجرافيك وجعله افضل بكثير",
   "max_cycles": 30,
   "cycle": 0,
-  "status": "building",
-  "findings": [],
-  "history": []
+  "status": "issues_found",
+  "findings": [
+    {
+      "title": "Generic animals (pig/cow/sheep) render eyes twice",
+      "severity": "medium",
+      "file": "index.html",
+      "detail": "The else branch for generic animals (line 2129) already renders a pair of eyes for pig/cow/sheep. Then lines 2147-2153 render a second pair for 'remaining mobs' which matches the same types. Each generic animal gets 4 eye boxes instead of 2. Remove the post-if/else 'Eyes for remaining mobs' block entirely."
+    },
+    {
+      "title": "Spider renders 4 legs, not 8 as comment claims",
+      "severity": "medium",
+      "file": "index.html",
+      "detail": "Comment says 'Spider legs (8 total, 4 per side)' but the loop for(var leg=0;leg<4;leg++) only produces 4 legs total (2 per side). The spider is missing half its legs. Change loop to iterate 8 times."
+    },
+    {
+      "title": "Particle color is hardcoded - per-particle BLOCK_RGB color is ignored",
+      "severity": "medium",
+      "file": "index.html",
+      "detail": "spawnParticles() stores per-particle r,g,b from BLOCK_RGB, but renderParticles() uses hardcoded gl.uniform4f(uColF,0.7,0.6,0.4,0.7) for all particles. Every block-break particle appears the same color regardless of block type."
+    },
+    {
+      "title": "Star twinkle computed but never used in rendering",
+      "severity": "low",
+      "file": "index.html",
+      "detail": "var twinkle=0.5+0.5*Math.sin(perfTime*2+si3*1.7) is computed per-star but never affects rendering. Stars render at constant opacity nightness2*0.7, so they don't twinkle."
+    }
+  ],
+  "history": [
+    {
+      "agent": "review",
+      "cycle": 0,
+      "result": "issues_found"
+    }
+  ]
 }
