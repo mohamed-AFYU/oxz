@@ -48,6 +48,18 @@
 #   merge_gate double-checks the commenter's actual repo permission via the API
 #   before ever calling `gh pr merge`. On a public repo, treat this as a real
 #   attack surface — don't loosen that permission check.
+#
+# RELIABILITY NOTE (added):
+#   The `anomalyco/opencode/github@latest` action has a known upstream bug: its
+#   internal "Get opencode version" step does an UNAUTHENTICATED curl to
+#   api.github.com/repos/anomalyco/opencode/releases/latest with `-sf`, so it
+#   dies hard (exit 1) whenever that shared-IP rate limit (60 req/hr, unauth)
+#   is hit — see anomalyco/opencode#32635. This is intermittent, not caused by
+#   anything in this workflow. Every call to that action below is wrapped with
+#   Wandalen/wretry.action, which retries the WHOLE composite action (including
+#   its internal steps) a few times with a delay, so a transient 403 there no
+#   longer fails your job. If it keeps failing after 3 attempts, it's a real
+#   upstream outage, not a flake — check anomalyco/opencode's issues page.
 # ==============================================================================
 
 name: 🤖 Multi-Agent Feature Pipeline
@@ -147,39 +159,43 @@ jobs:
           git push origin "${{ steps.branch.outputs.branch }}"
 
       - name: 🏗️ Run Build Agent
-        uses: anomalyco/opencode/github@latest
+        uses: Wandalen/wretry.action@master
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
-          model: ${{ inputs.model }}
-          use_github_token: true
-          prompt: |
-            You are the BUILD AGENT in a multi-agent pipeline (Build → Review ⇄ Fix → Verify → Decision).
+          action: anomalyco/opencode/github@latest
+          attempt_limit: 3
+          attempt_delay: 45000
+          with: |
+            model: ${{ inputs.model }}
+            use_github_token: true
+            prompt: |
+              You are the BUILD AGENT in a multi-agent pipeline (Build → Review ⇄ Fix → Verify → Decision).
 
-            TASK FROM USER:
-            ${{ inputs.prompt }}
+              TASK FROM USER:
+              ${{ inputs.prompt }}
 
-            YOU ARE ON BRANCH: ${{ steps.branch.outputs.branch }}
+              YOU ARE ON BRANCH: ${{ steps.branch.outputs.branch }}
 
-            YOUR JOB:
-            1. Inspect the repository and understand its architecture and conventions before writing any code.
-            2. Implement the requested feature/fix completely and correctly on this branch.
-            3. Run any available build/lint/test commands and fix what you can before finishing.
-            4. Commit your work with clear messages.
-            5. Push the branch and open a Pull Request against the default branch.
-               - PR title: a concise summary of the task.
-               - PR description MUST include a "## Pipeline" section explaining this PR is managed by an
-                 automated multi-agent pipeline (Build → Review → Fix → Verify → Decision), and that a human
-                 will get a final merge confirmation prompt once everything passes.
-            6. Post ONE comment on the PR starting with the header "### 🏗️ Build Agent" summarizing what you
-               built, key decisions, and anything you were unsure about.
-            7. Add the label "agent:review" to the PR to hand off to the Review Agent.
+              YOUR JOB:
+              1. Inspect the repository and understand its architecture and conventions before writing any code.
+              2. Implement the requested feature/fix completely and correctly on this branch.
+              3. Run any available build/lint/test commands and fix what you can before finishing.
+              4. Commit your work with clear messages.
+              5. Push the branch and open a Pull Request against the default branch.
+                 - PR title: a concise summary of the task.
+                 - PR description MUST include a "## Pipeline" section explaining this PR is managed by an
+                   automated multi-agent pipeline (Build → Review → Fix → Verify → Decision), and that a human
+                   will get a final merge confirmation prompt once everything passes.
+              6. Post ONE comment on the PR starting with the header "### 🏗️ Build Agent" summarizing what you
+                 built, key decisions, and anything you were unsure about.
+              7. Add the label "agent:review" to the PR to hand off to the Review Agent.
 
-            RULES:
-            - Do NOT add or remove any other pipeline label ("agent:fix", "agent:verify", "agent:decision",
-              "agent:blocked"). Routing beyond this first handoff is handled by the workflow itself.
-            - Do NOT merge anything.
-            - Never fake a passing test or a successful build.
+              RULES:
+              - Do NOT add or remove any other pipeline label ("agent:fix", "agent:verify", "agent:decision",
+                "agent:blocked"). Routing beyond this first handoff is handled by the workflow itself.
+              - Do NOT merge anything.
+              - Never fake a passing test or a successful build.
 
   # ============================================================================
   # STAGE 1 — REVIEW
@@ -203,43 +219,47 @@ jobs:
         run: gh pr checkout ${{ github.event.pull_request.number }}
 
       - name: 🔍 Run Review Agent
-        uses: anomalyco/opencode/github@latest
+        uses: Wandalen/wretry.action@master
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
-          model: opencode/mimo-v2.5-free
-          use_github_token: true
-          prompt: |
-            You are the REVIEW AGENT in a multi-agent pipeline.
+          action: anomalyco/opencode/github@latest
+          attempt_limit: 3
+          attempt_delay: 45000
+          with: |
+            model: opencode/mimo-v2.5-free
+            use_github_token: true
+            prompt: |
+              You are the REVIEW AGENT in a multi-agent pipeline.
 
-            Before anything else, read the full context:
-            - `gh pr view ${{ github.event.pull_request.number }} --comments`
-            - the file at $STATE_FILE on this branch (path: .github/agent-state.json), especially the
-              "task" and "history" fields, so you know what was actually asked for.
+              Before anything else, read the full context:
+              - `gh pr view ${{ github.event.pull_request.number }} --comments`
+              - the file at $STATE_FILE on this branch (path: .github/agent-state.json), especially the
+                "task" and "history" fields, so you know what was actually asked for.
 
-            YOUR JOB:
-            Review the complete diff of this PR as a senior engineer. Look for bugs, logic errors, security
-            issues, performance problems, missing error handling, missing tests for important behavior, and
-            any deviation from the task described in the state file.
+              YOUR JOB:
+              Review the complete diff of this PR as a senior engineer. Look for bugs, logic errors, security
+              issues, performance problems, missing error handling, missing tests for important behavior, and
+              any deviation from the task described in the state file.
 
-            Do NOT modify code. Do NOT push any commits except updating the state file as instructed below.
+              Do NOT modify code. Do NOT push any commits except updating the state file as instructed below.
 
-            OUTPUT (do both):
-            1. Post ONE PR comment starting with header "### 🔍 Review Agent — Cycle <current cycle from state
-               file>" listing every issue found (Title / Severity / File / Why it matters / Suggested fix), or
-               clearly stating "No issues found." if the PR is clean. Only report issues you can support with
-               evidence from the code — never invent problems just to produce a report.
-            2. Update .github/agent-state.json on this branch:
-               - set "status" to exactly "issues_found" or "clean"
-               - if issues_found: replace "findings" with a JSON array of
-                 {"title","severity","file","detail"} objects for THIS cycle only (overwrite, don't append)
-               - if clean: set "findings" to an empty array
-               - append one object to "history": {"agent":"review","cycle":<current cycle>,"result":"<status>"}
-               - commit and push ONLY this file, message: "chore(pipeline): review cycle result"
+              OUTPUT (do both):
+              1. Post ONE PR comment starting with header "### 🔍 Review Agent — Cycle <current cycle from state
+                 file>" listing every issue found (Title / Severity / File / Why it matters / Suggested fix), or
+                 clearly stating "No issues found." if the PR is clean. Only report issues you can support with
+                 evidence from the code — never invent problems just to produce a report.
+              2. Update .github/agent-state.json on this branch:
+                 - set "status" to exactly "issues_found" or "clean"
+                 - if issues_found: replace "findings" with a JSON array of
+                   {"title","severity","file","detail"} objects for THIS cycle only (overwrite, don't append)
+                 - if clean: set "findings" to an empty array
+                 - append one object to "history": {"agent":"review","cycle":<current cycle>,"result":"<status>"}
+                 - commit and push ONLY this file, message: "chore(pipeline): review cycle result"
 
-            RULES:
-            - Do NOT add or remove any "agent:*" label yourself — the workflow does this automatically based
-              on the state file you just wrote.
+              RULES:
+              - Do NOT add or remove any "agent:*" label yourself — the workflow does this automatically based
+                on the state file you just wrote.
 
       - name: 🧭 Route based on review result
         env:
@@ -300,28 +320,32 @@ jobs:
         run: gh pr checkout ${{ github.event.pull_request.number }}
 
       - name: 🛠️ Run Fix Agent
-        uses: anomalyco/opencode/github@latest
+        uses: Wandalen/wretry.action@master
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
-          model: opencode/mimo-v2.5-free
-          use_github_token: true
-          prompt: |
-            You are the FIX AGENT in a multi-agent pipeline.
+          action: anomalyco/opencode/github@latest
+          attempt_limit: 3
+          attempt_delay: 45000
+          with: |
+            model: opencode/mimo-v2.5-free
+            use_github_token: true
+            prompt: |
+              You are the FIX AGENT in a multi-agent pipeline.
 
-            Read .github/agent-state.json on this branch — it contains "findings" from the last Review or
-            Verify Agent pass (current cycle) and the original "task".
+              Read .github/agent-state.json on this branch — it contains "findings" from the last Review or
+              Verify Agent pass (current cycle) and the original "task".
 
-            YOUR JOB:
-            Fix EVERY finding listed. Do not introduce unrelated changes. Run relevant tests/build/lint after
-            fixing and confirm they actually pass. Never fake a passing test.
+              YOUR JOB:
+              Fix EVERY finding listed. Do not introduce unrelated changes. Run relevant tests/build/lint after
+              fixing and confirm they actually pass. Never fake a passing test.
 
-            OUTPUT:
-            1. Commit and push your fixes to this branch.
-            2. Post ONE PR comment starting with header "### 🛠️ Fix Agent — Cycle <current cycle>" explaining
-               what you changed for each finding.
-            3. Do NOT edit .github/agent-state.json and do NOT touch any "agent:*" label — the workflow hands
-               this back to the Review Agent automatically.
+              OUTPUT:
+              1. Commit and push your fixes to this branch.
+              2. Post ONE PR comment starting with header "### 🛠️ Fix Agent — Cycle <current cycle>" explaining
+                 what you changed for each finding.
+              3. Do NOT edit .github/agent-state.json and do NOT touch any "agent:*" label — the workflow hands
+                 this back to the Review Agent automatically.
 
       - name: 🔁 Hand back to Review Agent
         env:
@@ -352,31 +376,35 @@ jobs:
         run: gh pr checkout ${{ github.event.pull_request.number }}
 
       - name: ✅ Run Verify Agent
-        uses: anomalyco/opencode/github@latest
+        uses: Wandalen/wretry.action@master
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         with:
-          model: opencode/mimo-v2.5-free
-          use_github_token: true
-          prompt: |
-            You are the VERIFY AGENT — the independent quality gate. Do NOT trust the Review Agent's earlier
-            "clean" verdict blindly; re-check everything for yourself.
+          action: anomalyco/opencode/github@latest
+          attempt_limit: 3
+          attempt_delay: 45000
+          with: |
+            model: opencode/mimo-v2.5-free
+            use_github_token: true
+            prompt: |
+              You are the VERIFY AGENT — the independent quality gate. Do NOT trust the Review Agent's earlier
+              "clean" verdict blindly; re-check everything for yourself.
 
-            YOUR JOB:
-            1. Actually run the project's build, lint, and test commands (detect them from the repo — e.g.
-               package.json scripts, Makefile, etc.). Report REAL command output, never fabricate results.
-            2. Confirm the implementation genuinely satisfies the original task described in
-               .github/agent-state.json ("task" field) — not just "no errors", but "does what was asked".
-            3. Do NOT modify code.
+              YOUR JOB:
+              1. Actually run the project's build, lint, and test commands (detect them from the repo — e.g.
+                 package.json scripts, Makefile, etc.). Report REAL command output, never fabricate results.
+              2. Confirm the implementation genuinely satisfies the original task described in
+                 .github/agent-state.json ("task" field) — not just "no errors", but "does what was asked".
+              3. Do NOT modify code.
 
-            OUTPUT (do both):
-            1. Post ONE PR comment starting with header "### ✅ Verify Agent" with a summary of the real
-               command output and your verdict.
-            2. Update .github/agent-state.json:
-               - set "status" to "clean" (ready to ask the human) or "issues_found"
-               - if issues_found: replace "findings" with the new problems (same schema as Review Agent uses)
-               - append to "history": {"agent":"verify","cycle":<current cycle>,"result":"<status>"}
-               - commit and push ONLY this file.
+              OUTPUT (do both):
+              1. Post ONE PR comment starting with header "### ✅ Verify Agent" with a summary of the real
+                 command output and your verdict.
+              2. Update .github/agent-state.json:
+                 - set "status" to "clean" (ready to ask the human) or "issues_found"
+                 - if issues_found: replace "findings" with the new problems (same schema as Review Agent uses)
+                 - append to "history": {"agent":"verify","cycle":<current cycle>,"result":"<status>"}
+                 - commit and push ONLY this file.
 
       - name: 🧭 Route based on verify result
         env:
