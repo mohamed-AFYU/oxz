@@ -5,34 +5,16 @@
   "status": "issues_found",
   "findings": [
     {
-      "title": "Lightning flash erases entire scene",
-      "severity": "critical",
-      "file": "index.html",
-      "detail": "gl.clear(COLOR_BUFFER_BIT) in renderWeather() wipes all rendered geometry (terrain, mobs, clouds) and replaces the scene with a solid white frame. Lightning should overlay the scene, not erase it."
-    },
-    {
-      "title": "weatherManual is never reset, permanently disables auto-weather",
+      "title": "Lightning flash overlay stuck after storm→clear transition",
       "severity": "medium",
       "file": "index.html",
-      "detail": "Pressing M or clicking the button sets weatherManual=true with no code path to reset it to false. Automatic biome-based weather transitions are permanently disabled for the session."
+      "detail": "renderWeather() returns early for clear weather (line 2100) before reaching the lightning overlay cleanup code (lines 2128-2134). When weather transitions from storm to clear, updateWeather() sets lightningFlash=0 but the #lightning-flash div opacity is never reset, leaving a permanent white overlay on screen."
     },
     {
-      "title": "Storm state unreachable via automatic weather system",
+      "title": "DOM lookup repeated every frame in render loop",
       "severity": "low",
       "file": "index.html",
-      "detail": "updateWeather() only randomly selects from clear/rain/snow. Storm can only be reached via manual cycling, making it never part of natural gameplay."
-    },
-    {
-      "title": "Snow particle count silently increased from 160 to 240",
-      "severity": "low",
-      "file": "index.html",
-      "detail": "Drops array expanded to 240 for storm support, but renderWeather uses drops.length for snow, silently increasing snow particles by 50%. May impact low-end device performance."
-    },
-    {
-      "title": "weather.t not reset on manual cycle",
-      "severity": "low",
-      "file": "index.html",
-      "detail": "cycleWeather() does not reset weather.t to 0. If weatherManual is ever re-enabled, the stale timer could immediately trigger an unwanted weather change."
+      "detail": "document.getElementById('lightning-flash') is called up to twice per frame in renderWeather(), a hot render path. Should be cached at module scope to avoid repeated DOM queries."
     }
   ],
   "history": [
@@ -44,6 +26,16 @@
     {
       "agent": "review",
       "cycle": 0,
+      "result": "issues_found"
+    },
+    {
+      "agent": "fix",
+      "cycle": 1,
+      "result": "completed"
+    },
+    {
+      "agent": "review",
+      "cycle": 1,
       "result": "issues_found"
     }
   ]
