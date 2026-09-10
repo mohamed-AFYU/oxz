@@ -103,6 +103,7 @@
   .inv-cursor-count { position:absolute; bottom:0; right:2px; font-size:10px; color:#fff; font-family:monospace; text-shadow:1px 1px 0 #000; font-weight:bold; }
   .inv-grid-main { display:grid; grid-template-columns:repeat(9,1fr); gap:3px; justify-items:center; }
   .inv-grid-craft { display:grid; grid-template-columns:repeat(2,1fr); gap:4px; justify-items:center; }
+  .inv-grid-craft3x3 { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; justify-items:center; }
   .inv-grid-armor { display:grid; grid-template-columns:repeat(2,1fr); gap:4px; justify-items:center; }
   .inv-slot.armor-slot { border-color:#6a5a2e; background:rgba(50,40,20,.9); }
   .inv-slot.armor-slot:hover { border-color:#a98a3e; }
@@ -237,7 +238,7 @@ var WORLD_SEED = 20260909;
 // Block ids
 var AIR=0, GRASS=1, DIRT=2, STONE=3, LOG=4, LEAF=5, SAND=6, PLANK=7, GLASS=8,
     BRICK=9, WATER=10, COAL=11, IRON=12, GOLD=13, DIAM=14, SNOWG=15, CACTUS=16,
-    NETHERRACK=17, NPORTAL=18, OBSIDIAN=19, SOULSAND=20, GLOWSTONE=21, LAVA=22;
+    NETHERRACK=17, NPORTAL=18, OBSIDIAN=19, SOULSAND=20, GLOWSTONE=21, LAVA=22, CRAFTTABLE=23, BOOKSHELF=24;
 var BLOCKS = {
   1:{name:'Grass', top:0, side:1, bottom:2, hard:0.6, tool:'shovel'},
   2:{name:'Dirt', top:2, side:2, bottom:2, hard:0.5, tool:'shovel'},
@@ -260,9 +261,11 @@ var BLOCKS = {
   19:{name:'Obsidian', top:24, side:24, bottom:24, hard:50, tool:'pickaxe', minTool:4},
   20:{name:'Soul Sand', top:25, side:25, bottom:25, hard:1.0, tool:'shovel'},
   21:{name:'Glowstone', top:26, side:26, bottom:26, hard:0.5},
-  22:{name:'Lava', top:27, side:27, bottom:27, hard:100}
+  22:{name:'Lava', top:27, side:27, bottom:27, hard:100},
+  23:{name:'Crafting Table', top:28, side:29, bottom:7, hard:2.0, tool:'axe'},
+  24:{name:'Bookshelf', top:30, side:31, bottom:7, hard:1.5, tool:'axe'}
 };
-var HOTBAR = [GRASS,DIRT,STONE,LOG,LEAF,SAND,PLANK,GLASS,BRICK];
+var HOTBAR = [GRASS,DIRT,STONE,LOG,LEAF,SAND,PLANK,GLASS,CRAFTTABLE];
 var selIndex = 0;
 
 // ---------- Item definitions (non-block items) ----------
@@ -282,6 +285,13 @@ var ITEMS = {
   'Gold Nugget': {name:'Gold Nugget', color:[0.96,0.84,0.26],maxStack:64, food:0},
   'Iron Ingot':  {name:'Iron Ingot',  color:[0.85,0.85,0.85],maxStack:64, food:0},
   'Diamond':     {name:'Diamond',     color:[0.43,0.95,0.95],maxStack:64, food:0},
+  'Leather':     {name:'Leather',     color:[0.55,0.33,0.15],maxStack:64, food:0},
+  'Book':        {name:'Book',        color:[0.6,0.45,0.25],maxStack:64, food:0},
+  'Wool':        {name:'Wool',        color:[0.92,0.92,0.92],maxStack:64, food:0},
+  'Door':        {name:'Door',        color:[0.65,0.49,0.23],maxStack:64, food:0},
+  'Fence':       {name:'Fence',       color:[0.65,0.49,0.23],maxStack:64, food:0},
+  'Bed':         {name:'Bed',         color:[0.8,0.2,0.2],maxStack:1, food:0},
+  'Chest':       {name:'Chest',       color:[0.65,0.49,0.23],maxStack:64, food:0},
   'Wooden Pickaxe':  {name:'Wooden Pickaxe',  color:[0.65,0.49,0.23],maxStack:1, tool:'pickaxe', tier:1, food:0, maxDurability:60, damage:2},
   'Stone Pickaxe':   {name:'Stone Pickaxe',   color:[0.55,0.55,0.55],maxStack:1, tool:'pickaxe', tier:2, food:0, maxDurability:132, damage:2},
   'Iron Pickaxe':    {name:'Iron Pickaxe',    color:[0.85,0.85,0.85],maxStack:1, tool:'pickaxe', tier:3, food:0, maxDurability:251, damage:2},
@@ -294,6 +304,8 @@ var ITEMS = {
   'Stone Shovel':    {name:'Stone Shovel',    color:[0.55,0.55,0.55],maxStack:1, tool:'shovel', tier:2, food:0, maxDurability:132, damage:2},
   'Iron Shovel':     {name:'Iron Shovel',     color:[0.85,0.85,0.85],maxStack:1, tool:'shovel', tier:3, food:0, maxDurability:251, damage:2},
   'Diamond Shovel':  {name:'Diamond Shovel',  color:[0.43,0.95,0.95],maxStack:1, tool:'shovel', tier:4, food:0, maxDurability:1562, damage:2},
+  // Crafting Table
+  'Crafting Table':  {name:'Crafting Table',  color:[0.65,0.49,0.23],maxStack:64, food:0},
   // Swords
   'Wooden Sword':    {name:'Wooden Sword',    color:[0.65,0.49,0.23],maxStack:1, tool:'sword', tier:1, food:0, maxDurability:60, damage:4},
   'Stone Sword':     {name:'Stone Sword',     color:[0.55,0.55,0.55],maxStack:1, tool:'sword', tier:2, food:0, maxDurability:132, damage:5},
@@ -320,6 +332,7 @@ var ITEMS = {
 var inv = {
   slots: [],       // 45 slots: [0-8]=hotbar, [9-44]=main inventory (4 rows x 9)
   craft: [],       // 2x2 crafting grid + 1 result (5 total, index 0-3=input, 4=result)
+  craft3x3: [],    // 3x3 crafting grid + 1 result (10 total, index 0-8=input, 9=result)
   cursor: null,    // {type, id, count} - item being dragged
   dirty: false,
   armor: { helmet: null, chestplate: null, leggings: null, boots: null },
@@ -338,6 +351,7 @@ function initInventory() {
   inv.slots = [];
   for (var i = 0; i <45; i++) inv.slots.push(null);
   inv.craft = [null,null,null,null,null];
+  inv.craft3x3 = [null,null,null,null,null,null,null,null,null,null];
   inv.cursor = null;
   inv.dirty = false;
   inv.armor = { helmet: null, chestplate: null, leggings: null, boots: null };
@@ -501,134 +515,205 @@ function syncHotbarToInv() {
 
 // ---------- Crafting ----------
 function checkCrafting() {
-  inv.craft[4] = null; // clear result
-  var c = inv.craft;
-  function isBlock(i, id){ return c[i] && c[i].type==='block' && c[i].id===id; }
-  function isItem(i, name){ return c[i] && c[i].type==='item' && c[i].id===name; }
-  function isEmpty(i){ return !c[i]; }
-  // Recipe: 1 Log -> 4 Planks
-  if(isBlock(0,LOG) && isEmpty(1) && isEmpty(2) && isEmpty(3)){
-    inv.craft[4] = makeSlot('block', PLANK, 4); return;
-  }
-  // Recipe: 2 Planks -> 4 Sticks
-  if(isBlock(0,PLANK) && c[0].count>=2 && isEmpty(1) && isEmpty(2) && isEmpty(3)){
-    inv.craft[4] = makeSlot('item', 'Stick', 4); return;
-  }
-  // Recipe: 1 Plank + 1 Coal -> 4 Torches
-  if(isBlock(0,PLANK) && isBlock(1,COAL) && isEmpty(2) && isEmpty(3)){
-    inv.craft[4] = makeSlot('item', 'Torch', 4); return;
-  }
-  // Wooden Pickaxe: [Plank][Plank] / [Stick][Stick]
-  if(isBlock(0,PLANK) && isBlock(1,PLANK) && isItem(2,'Stick') && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Wooden Pickaxe', 1); return;
-  }
-  // Wooden Axe: [Plank][Plank] / [Plank][Stick]
-  if(isBlock(0,PLANK) && isBlock(1,PLANK) && isBlock(2,PLANK) && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Wooden Axe', 1); return;
-  }
-  // Wooden Shovel: [ ][Plank] / [ ][Stick]
-  if(isEmpty(0) && isBlock(1,PLANK) && isEmpty(2) && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Wooden Shovel', 1); return;
-  }
-  // Stone Pickaxe: [Stone][Stone] / [Stick][Stick]
-  if(isBlock(0,STONE) && isBlock(1,STONE) && isItem(2,'Stick') && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Stone Pickaxe', 1); return;
-  }
-  // Stone Axe: [Stone][Stone] / [Stone][Stick]
-  if(isBlock(0,STONE) && isBlock(1,STONE) && isBlock(2,STONE) && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Stone Axe', 1); return;
-  }
-  // Stone Shovel: [ ][Stone] / [ ][Stick]
-  if(isEmpty(0) && isBlock(1,STONE) && isEmpty(2) && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Stone Shovel', 1); return;
-  }
-  // Iron Pickaxe: [Iron Ingot][Iron Ingot] / [Stick][Stick]
-  if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Stick') && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Iron Pickaxe', 1); return;
-  }
-  // Iron Axe: [Iron Ingot][Iron Ingot] / [Iron Ingot][Stick]
-  if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Iron Ingot') && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Iron Axe', 1); return;
-  }
-  // Iron Shovel: [ ][Iron Ingot] / [ ][Stick]
-  if(isEmpty(0) && isItem(1,'Iron Ingot') && isEmpty(2) && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Iron Shovel', 1); return;
-  }
-  // Diamond Pickaxe: [Diamond][Diamond] / [Stick][Stick]
-  if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Stick') && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Diamond Pickaxe', 1); return;
-  }
-  // Diamond Axe: [Diamond][Diamond] / [Diamond][Stick]
-  if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Diamond') && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Diamond Axe', 1); return;
-  }
-  // Diamond Shovel: [ ][Diamond] / [ ][Stick]
-  if(isEmpty(0) && isItem(1,'Diamond') && isEmpty(2) && isItem(3,'Stick')){
-    inv.craft[4] = makeSlot('item', 'Diamond Shovel', 1); return;
-  }
-  // Wooden Sword: [Plank][Plank] / [Stick][ ]
-  if(isBlock(0,PLANK) && isBlock(1,PLANK) && isItem(2,'Stick') && isEmpty(3)){
-    inv.craft[4] = makeSlot('item', 'Wooden Sword', 1); return;
-  }
-  // Stone Sword: [Stone][Stone] / [Stick][ ]
-  if(isBlock(0,STONE) && isBlock(1,STONE) && isItem(2,'Stick') && isEmpty(3)){
-    inv.craft[4] = makeSlot('item', 'Stone Sword', 1); return;
-  }
-  // Iron Sword: [Iron Ingot][Iron Ingot] / [Stick][ ]
-  if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Stick') && isEmpty(3)){
-    inv.craft[4] = makeSlot('item', 'Iron Sword', 1); return;
-  }
-  // Diamond Sword: [Diamond][Diamond] / [Stick][ ]
-  if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Stick') && isEmpty(3)){
-    inv.craft[4] = makeSlot('item', 'Diamond Sword', 1); return;
-  }
-  // Iron Helmet: [Iron][Iron] / [Iron][ ]
-  if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Iron Ingot') && isEmpty(3)){
-    inv.craft[4] = makeSlot('item', 'Iron Helmet', 1); return;
-  }
-  // Iron Chestplate: [Iron][ ] / [Iron][Iron]
-  if(isItem(0,'Iron Ingot') && isEmpty(1) && isItem(2,'Iron Ingot') && isItem(3,'Iron Ingot')){
-    inv.craft[4] = makeSlot('item', 'Iron Chestplate', 1); return;
-  }
-  // Iron Leggings: [Iron][Iron] / [ ][Iron]
-  if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isEmpty(2) && isItem(3,'Iron Ingot')){
-    inv.craft[4] = makeSlot('item', 'Iron Leggings', 1); return;
-  }
-  // Iron Boots: [ ][ ] / [Iron][Iron]
-  if(isEmpty(0) && isEmpty(1) && isItem(2,'Iron Ingot') && isItem(3,'Iron Ingot')){
-    inv.craft[4] = makeSlot('item', 'Iron Boots', 1); return;
-  }
-  // Gold Helmet: [Gold][Gold] / [Gold][ ]
-  if(isItem(0,'Gold Nugget') && isItem(1,'Gold Nugget') && isItem(2,'Gold Nugget') && isEmpty(3)){
-    inv.craft[4] = makeSlot('item', 'Gold Helmet', 1); return;
-  }
-  // Gold Chestplate: [Gold][ ] / [Gold][Gold]
-  if(isItem(0,'Gold Nugget') && isEmpty(1) && isItem(2,'Gold Nugget') && isItem(3,'Gold Nugget')){
-    inv.craft[4] = makeSlot('item', 'Gold Chestplate', 1); return;
-  }
-  // Gold Leggings: [Gold][Gold] / [ ][Gold]
-  if(isItem(0,'Gold Nugget') && isItem(1,'Gold Nugget') && isEmpty(2) && isItem(3,'Gold Nugget')){
-    inv.craft[4] = makeSlot('item', 'Gold Leggings', 1); return;
-  }
-  // Gold Boots: [ ][ ] / [Gold][Gold]
-  if(isEmpty(0) && isEmpty(1) && isItem(2,'Gold Nugget') && isItem(3,'Gold Nugget')){
-    inv.craft[4] = makeSlot('item', 'Gold Boots', 1); return;
-  }
-  // Diamond Helmet: [Diamond][Diamond] / [Diamond][ ]
-  if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Diamond') && isEmpty(3)){
-    inv.craft[4] = makeSlot('item', 'Diamond Helmet', 1); return;
-  }
-  // Diamond Chestplate: [Diamond][ ] / [Diamond][Diamond]
-  if(isItem(0,'Diamond') && isEmpty(1) && isItem(2,'Diamond') && isItem(3,'Diamond')){
-    inv.craft[4] = makeSlot('item', 'Diamond Chestplate', 1); return;
-  }
-  // Diamond Leggings: [Diamond][Diamond] / [ ][Diamond]
-  if(isItem(0,'Diamond') && isItem(1,'Diamond') && isEmpty(2) && isItem(3,'Diamond')){
-    inv.craft[4] = makeSlot('item', 'Diamond Leggings', 1); return;
-  }
-  // Diamond Boots: [ ][ ] / [Diamond][Diamond]
-  if(isEmpty(0) && isEmpty(1) && isItem(2,'Diamond') && isItem(3,'Diamond')){
-    inv.craft[4] = makeSlot('item', 'Diamond Boots', 1); return;
+  if (craft3x3Open) {
+    // 3x3 crafting grid
+    inv.craft3x3[9] = null;
+    var c = inv.craft3x3;
+    function isB(i, id){ return c[i] && c[i].type==='block' && c[i].id===id; }
+    function isI(i, name){ return c[i] && c[i].type==='item' && c[i].id===name; }
+    function isE(i){ return !c[i]; }
+    // Chest: 8 Planks in a ring
+    if(isB(0,PLANK) && isB(1,PLANK) && isB(2,PLANK) &&
+       isB(3,PLANK) && isE(4) && isB(5,PLANK) &&
+       isB(6,PLANK) && isB(7,PLANK) && isB(8,PLANK)){
+      inv.craft3x3[9] = makeSlot('item', 'Chest', 1); return;
+    }
+    // Bookshelf: Planks top/bottom, Books middle row
+    if(isB(0,PLANK) && isB(1,PLANK) && isB(2,PLANK) &&
+       isI(3,'Book') && isI(4,'Book') && isI(5,'Book') &&
+       isB(6,PLANK) && isB(7,PLANK) && isB(8,PLANK)){
+      inv.craft3x3[9] = makeSlot('block', BOOKSHELF, 1); return;
+    }
+    // Door: 6 Planks in 2 columns
+    if(isB(0,PLANK) && isE(1) && isB(2,PLANK) &&
+       isB(3,PLANK) && isE(4) && isB(5,PLANK) &&
+       isB(6,PLANK) && isE(7) && isB(8,PLANK)){
+      inv.craft3x3[9] = makeSlot('item', 'Door', 3); return;
+    }
+    // Bed: 3 Wool + 3 Planks (Wool on top, Planks below)
+    if(isI(0,'Wool') && isI(1,'Wool') && isI(2,'Wool') &&
+       isB(3,PLANK) && isB(4,PLANK) && isB(5,PLANK) &&
+       isE(6) && isE(7) && isE(8)){
+      inv.craft3x3[9] = makeSlot('item', 'Bed', 1); return;
+    }
+    // Fence: 4 Planks in bottom 2 rows, 2 Sticks on top
+    if(isI(0,'Stick') && isI(1,'Stick') && isE(2) &&
+       isB(3,PLANK) && isB(4,PLANK) && isB(5,PLANK) &&
+       isB(6,PLANK) && isB(7,PLANK) && isB(8,PLANK)){
+      inv.craft3x3[9] = makeSlot('item', 'Fence', 3); return;
+    }
+    // Crafting Table: 4 Planks in 2x2
+    if(isB(0,PLANK) && isB(1,PLANK) && isE(2) &&
+       isB(3,PLANK) && isB(4,PLANK) && isE(5) &&
+       isE(6) && isE(7) && isE(8)){
+      inv.craft3x3[9] = makeSlot('item', 'Crafting Table', 1); return;
+    }
+    // Also support 2x2 recipes in the top-left corner of 3x3
+    // Recipe: 1 Log -> 4 Planks
+    if(isB(0,LOG) && isE(1) && isE(2) && isE(3) && isE(4) && isE(5) && isE(6) && isE(7) && isE(8)){
+      inv.craft3x3[9] = makeSlot('block', PLANK, 4); return;
+    }
+    // Recipe: 2 Planks -> 4 Sticks
+    if(isB(0,PLANK) && c[0].count>=2 && isE(1) && isE(2) && isE(3) && isE(4) && isE(5) && isE(6) && isE(7) && isE(8)){
+      inv.craft3x3[9] = makeSlot('item', 'Stick', 4); return;
+    }
+    // Recipe: 1 Plank + 1 Coal -> 4 Torches
+    if(isB(0,PLANK) && isB(1,COAL) && isE(2) && isE(3) && isE(4) && isE(5) && isE(6) && isE(7) && isE(8)){
+      inv.craft3x3[9] = makeSlot('item', 'Torch', 4); return;
+    }
+  } else {
+    // 2x2 crafting grid (existing logic)
+    inv.craft[4] = null;
+    var c = inv.craft;
+    function isBlock(i, id){ return c[i] && c[i].type==='block' && c[i].id===id; }
+    function isItem(i, name){ return c[i] && c[i].type==='item' && c[i].id===name; }
+    function isEmpty(i){ return !c[i]; }
+    // Recipe: 1 Log -> 4 Planks
+    if(isBlock(0,LOG) && isEmpty(1) && isEmpty(2) && isEmpty(3)){
+      inv.craft[4] = makeSlot('block', PLANK, 4); return;
+    }
+    // Recipe: 2 Planks -> 4 Sticks
+    if(isBlock(0,PLANK) && c[0].count>=2 && isEmpty(1) && isEmpty(2) && isEmpty(3)){
+      inv.craft[4] = makeSlot('item', 'Stick', 4); return;
+    }
+    // Recipe: 1 Plank + 1 Coal -> 4 Torches
+    if(isBlock(0,PLANK) && isBlock(1,COAL) && isEmpty(2) && isEmpty(3)){
+      inv.craft[4] = makeSlot('item', 'Torch', 4); return;
+    }
+    // Recipe: 1 Leather + 1 Plank -> 1 Book
+    if(isItem(0,'Leather') && isBlock(1,PLANK) && isEmpty(2) && isEmpty(3)){
+      inv.craft[4] = makeSlot('item', 'Book', 1); return;
+    }
+    // Recipe: 4 Wool -> 1 Bed (2x2 in player grid)
+    if(isItem(0,'Wool') && isItem(1,'Wool') && isItem(2,'Wool') && isItem(3,'Wool')){
+      inv.craft[4] = makeSlot('item', 'Bed', 1); return;
+    }
+    // Recipe: 4 Planks -> 1 Crafting Table
+    if(isBlock(0,PLANK) && isBlock(1,PLANK) && isBlock(2,PLANK) && isBlock(3,PLANK)){
+      inv.craft[4] = makeSlot('item', 'Crafting Table', 1); return;
+    }
+    // Wooden Pickaxe: [Plank][Plank] / [Stick][Stick]
+    if(isBlock(0,PLANK) && isBlock(1,PLANK) && isItem(2,'Stick') && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Wooden Pickaxe', 1); return;
+    }
+    // Wooden Axe: [Plank][Plank] / [Plank][Stick]
+    if(isBlock(0,PLANK) && isBlock(1,PLANK) && isBlock(2,PLANK) && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Wooden Axe', 1); return;
+    }
+    // Wooden Shovel: [ ][Plank] / [ ][Stick]
+    if(isEmpty(0) && isBlock(1,PLANK) && isEmpty(2) && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Wooden Shovel', 1); return;
+    }
+    // Stone Pickaxe: [Stone][Stone] / [Stick][Stick]
+    if(isBlock(0,STONE) && isBlock(1,STONE) && isItem(2,'Stick') && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Stone Pickaxe', 1); return;
+    }
+    // Stone Axe: [Stone][Stone] / [Stone][Stick]
+    if(isBlock(0,STONE) && isBlock(1,STONE) && isBlock(2,STONE) && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Stone Axe', 1); return;
+    }
+    // Stone Shovel: [ ][Stone] / [ ][Stick]
+    if(isEmpty(0) && isBlock(1,STONE) && isEmpty(2) && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Stone Shovel', 1); return;
+    }
+    // Iron Pickaxe: [Iron Ingot][Iron Ingot] / [Stick][Stick]
+    if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Stick') && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Iron Pickaxe', 1); return;
+    }
+    // Iron Axe: [Iron Ingot][Iron Ingot] / [Iron Ingot][Stick]
+    if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Iron Ingot') && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Iron Axe', 1); return;
+    }
+    // Iron Shovel: [ ][Iron Ingot] / [ ][Stick]
+    if(isEmpty(0) && isItem(1,'Iron Ingot') && isEmpty(2) && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Iron Shovel', 1); return;
+    }
+    // Diamond Pickaxe: [Diamond][Diamond] / [Stick][Stick]
+    if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Stick') && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Diamond Pickaxe', 1); return;
+    }
+    // Diamond Axe: [Diamond][Diamond] / [Diamond][Stick]
+    if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Diamond') && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Diamond Axe', 1); return;
+    }
+    // Diamond Shovel: [ ][Diamond] / [ ][Stick]
+    if(isEmpty(0) && isItem(1,'Diamond') && isEmpty(2) && isItem(3,'Stick')){
+      inv.craft[4] = makeSlot('item', 'Diamond Shovel', 1); return;
+    }
+    // Wooden Sword: [Plank][Plank] / [Stick][ ]
+    if(isBlock(0,PLANK) && isBlock(1,PLANK) && isItem(2,'Stick') && isEmpty(3)){
+      inv.craft[4] = makeSlot('item', 'Wooden Sword', 1); return;
+    }
+    // Stone Sword: [Stone][Stone] / [Stick][ ]
+    if(isBlock(0,STONE) && isBlock(1,STONE) && isItem(2,'Stick') && isEmpty(3)){
+      inv.craft[4] = makeSlot('item', 'Stone Sword', 1); return;
+    }
+    // Iron Sword: [Iron Ingot][Iron Ingot] / [Stick][ ]
+    if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Stick') && isEmpty(3)){
+      inv.craft[4] = makeSlot('item', 'Iron Sword', 1); return;
+    }
+    // Diamond Sword: [Diamond][Diamond] / [Stick][ ]
+    if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Stick') && isEmpty(3)){
+      inv.craft[4] = makeSlot('item', 'Diamond Sword', 1); return;
+    }
+    // Iron Helmet: [Iron][Iron] / [Iron][ ]
+    if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Iron Ingot') && isEmpty(3)){
+      inv.craft[4] = makeSlot('item', 'Iron Helmet', 1); return;
+    }
+    // Iron Chestplate: [Iron][ ] / [Iron][Iron]
+    if(isItem(0,'Iron Ingot') && isEmpty(1) && isItem(2,'Iron Ingot') && isItem(3,'Iron Ingot')){
+      inv.craft[4] = makeSlot('item', 'Iron Chestplate', 1); return;
+    }
+    // Iron Leggings: [Iron][Iron] / [ ][Iron]
+    if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isEmpty(2) && isItem(3,'Iron Ingot')){
+      inv.craft[4] = makeSlot('item', 'Iron Leggings', 1); return;
+    }
+    // Iron Boots: [ ][ ] / [Iron][Iron]
+    if(isEmpty(0) && isEmpty(1) && isItem(2,'Iron Ingot') && isItem(3,'Iron Ingot')){
+      inv.craft[4] = makeSlot('item', 'Iron Boots', 1); return;
+    }
+    // Gold Helmet: [Gold][Gold] / [Gold][ ]
+    if(isItem(0,'Gold Nugget') && isItem(1,'Gold Nugget') && isItem(2,'Gold Nugget') && isEmpty(3)){
+      inv.craft[4] = makeSlot('item', 'Gold Helmet', 1); return;
+    }
+    // Gold Chestplate: [Gold][ ] / [Gold][Gold]
+    if(isItem(0,'Gold Nugget') && isEmpty(1) && isItem(2,'Gold Nugget') && isItem(3,'Gold Nugget')){
+      inv.craft[4] = makeSlot('item', 'Gold Chestplate', 1); return;
+    }
+    // Gold Leggings: [Gold][Gold] / [ ][Gold]
+    if(isItem(0,'Gold Nugget') && isItem(1,'Gold Nugget') && isEmpty(2) && isItem(3,'Gold Nugget')){
+      inv.craft[4] = makeSlot('item', 'Gold Leggings', 1); return;
+    }
+    // Gold Boots: [ ][ ] / [Gold][Gold]
+    if(isEmpty(0) && isEmpty(1) && isItem(2,'Gold Nugget') && isItem(3,'Gold Nugget')){
+      inv.craft[4] = makeSlot('item', 'Gold Boots', 1); return;
+    }
+    // Diamond Helmet: [Diamond][Diamond] / [Diamond][ ]
+    if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Diamond') && isEmpty(3)){
+      inv.craft[4] = makeSlot('item', 'Diamond Helmet', 1); return;
+    }
+    // Diamond Chestplate: [Diamond][ ] / [Diamond][Diamond]
+    if(isItem(0,'Diamond') && isEmpty(1) && isItem(2,'Diamond') && isItem(3,'Diamond')){
+      inv.craft[4] = makeSlot('item', 'Diamond Chestplate', 1); return;
+    }
+    // Diamond Leggings: [Diamond][Diamond] / [ ][Diamond]
+    if(isItem(0,'Diamond') && isItem(1,'Diamond') && isEmpty(2) && isItem(3,'Diamond')){
+      inv.craft[4] = makeSlot('item', 'Diamond Leggings', 1); return;
+    }
+    // Diamond Boots: [ ][ ] / [Diamond][Diamond]
+    if(isEmpty(0) && isEmpty(1) && isItem(2,'Diamond') && isItem(3,'Diamond')){
+      inv.craft[4] = makeSlot('item', 'Diamond Boots', 1); return;
+    }
   }
 }
 
@@ -684,6 +769,7 @@ function loadInv() {
 
 // ---------- Inventory UI ----------
 var invEl, invMainEl, invHotbarEl, invCraftEl, invCraftResultEl, invStatsEl, invTooltipEl, invCursorEl, invArmorEl;
+var craft3x3Open = false;
 
 function initInvUI() {
   invEl = document.getElementById('inventory');
@@ -777,6 +863,9 @@ function buildInvSlot(slot, idx, className, clickHandler, rightClickHandler) {
 
 function buildInvGrid() {
   if (!invMainEl) return;
+  // Update crafting section label
+  var craftLabel = document.querySelector('#inv-craft-area .inv-section');
+  if (craftLabel) craftLabel.textContent = craft3x3Open ? '3x3 Crafting' : 'Crafting';
   invMainEl.innerHTML = '';
   // Main inventory: slots 9-44 (4 rows x 9)
   for (var i = 9; i < 45; i++) {
@@ -790,10 +879,18 @@ function buildInvGrid() {
     invHotbarEl.appendChild(buildInvSlot(inv.slots[i], i, cls, invSlotClick, invSlotRightClick));
   }
 
-  // Crafting grid: slots 0-3 in inv.craft
+  // Crafting grid: conditional 2x2 or 3x3
   invCraftEl.innerHTML = '';
-  for (var i = 0; i < 4; i++) {
-    invCraftEl.appendChild(buildInvSlot(inv.craft[i], i, 'craft-slot', craftSlotClick, craftSlotRightClick));
+  if (craft3x3Open) {
+    invCraftEl.className = 'inv-grid-craft3x3';
+    for (var i = 0; i < 9; i++) {
+      invCraftEl.appendChild(buildInvSlot(inv.craft3x3[i], i, 'craft-slot', craft3x3SlotClick, craft3x3SlotRightClick));
+    }
+  } else {
+    invCraftEl.className = 'inv-grid-craft';
+    for (var i = 0; i < 4; i++) {
+      invCraftEl.appendChild(buildInvSlot(inv.craft[i], i, 'craft-slot', craftSlotClick, craftSlotRightClick));
+    }
   }
 
   // Armor slots
@@ -832,7 +929,11 @@ function buildInvGrid() {
   checkCrafting();
   // Render crafting result
   invCraftResultEl.innerHTML = '';
-  invCraftResultEl.appendChild(buildInvSlot(inv.craft[4], 4, 'result-slot', craftResultClick, null));
+  if (craft3x3Open) {
+    invCraftResultEl.appendChild(buildInvSlot(inv.craft3x3[9], 9, 'result-slot', craft3x3ResultClick, null));
+  } else {
+    invCraftResultEl.appendChild(buildInvSlot(inv.craft[4], 4, 'result-slot', craftResultClick, null));
+  }
 }
 
 function invCountUsed() {
@@ -1038,6 +1139,81 @@ function armorSlotClick(idx, btn, e) {
   updateCursor();
 }
 function armorSlotRightClick(idx, btn, e) { armorSlotClick(idx, 'right', e); }
+
+// ---------- 3x3 Crafting slot interactions ----------
+function craft3x3SlotClick(idx, btn, e) {
+  if (btn === 'left') {
+    if (inv.cursor) {
+      var existing = inv.craft3x3[idx];
+      if (existing && slotsMatch(existing, inv.cursor)) {
+        var max = invSlotMaxStack(existing);
+        var add = Math.min(inv.cursor.count, max - existing.count);
+        existing.count += add;
+        inv.cursor.count -= add;
+        if (inv.cursor.count <= 0) inv.cursor = null;
+      } else if (!existing) {
+        inv.craft3x3[idx] = makeSlot(inv.cursor.type, inv.cursor.id, inv.cursor.count);
+        inv.cursor = null;
+      } else {
+        var tmp = inv.craft3x3[idx];
+        inv.craft3x3[idx] = makeSlot(inv.cursor.type, inv.cursor.id, inv.cursor.count);
+        inv.cursor = tmp;
+      }
+    } else if (inv.craft3x3[idx]) {
+      inv.cursor = makeSlot(inv.craft3x3[idx].type, inv.craft3x3[idx].id, inv.craft3x3[idx].count);
+      inv.craft3x3[idx] = null;
+    }
+  } else if (btn === 'right') {
+    if (inv.cursor) {
+      var existing = inv.craft3x3[idx];
+      if (!existing) {
+        inv.craft3x3[idx] = makeSlot(inv.cursor.type, inv.cursor.id, 1);
+        inv.cursor.count--;
+        if (inv.cursor.count <= 0) inv.cursor = null;
+      } else if (slotsMatch(existing, inv.cursor) && existing.count < invSlotMaxStack(existing)) {
+        existing.count++;
+        inv.cursor.count--;
+        if (inv.cursor.count <= 0) inv.cursor = null;
+      }
+    } else if (inv.craft3x3[idx] && inv.craft3x3[idx].count > 1) {
+      var s = inv.craft3x3[idx];
+      var half = Math.ceil(s.count / 2);
+      inv.cursor = makeSlot(s.type, s.id, half);
+      s.count -= half;
+      if (s.count <= 0) inv.craft3x3[idx] = null;
+    } else if (inv.craft3x3[idx]) {
+      inv.cursor = makeSlot(inv.craft3x3[idx].type, inv.craft3x3[idx].id, 1);
+      inv.craft3x3[idx].count--;
+      if (inv.craft3x3[idx].count <= 0) inv.craft3x3[idx] = null;
+    }
+  }
+  checkCrafting();
+  buildInvGrid();
+  updateCursor();
+}
+function craft3x3SlotRightClick(idx, btn, e) { craft3x3SlotClick(idx, 'right', e); }
+
+function craft3x3ResultClick(idx, btn, e) {
+  if (btn !== 'left') return;
+  if (!inv.craft3x3[9]) return;
+  if (inv.cursor) {
+    if (slotsMatch(inv.cursor, inv.craft3x3[9])) {
+      inv.cursor.count += inv.craft3x3[9].count;
+    } else return;
+  } else {
+    inv.cursor = makeSlot(inv.craft3x3[9].type, inv.craft3x3[9].id, inv.craft3x3[9].count);
+  }
+  for (var k = 0; k < 9; k++) {
+    if (inv.craft3x3[k]) {
+      inv.craft3x3[k].count--;
+      if (inv.craft3x3[k].count <= 0) inv.craft3x3[k] = null;
+    }
+  }
+  inv.craft3x3[9] = null;
+  checkCrafting();
+  buildInvGrid();
+  updateCursor();
+}
 
 function craftResultClick(idx, btn, e) {
   if (btn !== 'left') return;
@@ -1552,6 +1728,27 @@ function makeAtlas(){
   tile(25, function(){ var r=trnd(); if(r<0.15) return vary('#5a3d1e',10); return vary('#6b4a2a',14); });
   tile(26, function(){ var r=trnd(); if(r<0.3) return vary('#ffdd44',15); return vary('#ffaa22',12); });
   tile(27, function(){ var r=trnd(); if(r<0.2) return vary('#ff4400',20); return vary('#ff8800',15); });
+  // Crafting Table top (tile 28): wooden surface with grid lines
+  tile(28, function(x,y){
+    if((x===3||x===12)&&(y>=2&&y<=13)) return vary('#5a3d22',8);
+    if((y===3||y===12)&&(x>=2&&x<=13)) return vary('#5a3d22',8);
+    return vary('#b8924a',12);
+  });
+  // Crafting Table side (tile 29): plank texture with saw marks
+  tile(29, function(x,y){
+    if(y%5===0) return vary('#6b4a2a',10);
+    if(x===7||x===8) return vary('#9c7436',8);
+    return vary('#b8924a',12);
+  });
+  // Bookshelf top (tile 30): planks
+  tile(30, function(){ return vary('#b8924a',12); });
+  // Bookshelf side (tile 31): books between planks
+  tile(31, function(x,y){
+    if(y<3||y>12) return vary('#b8924a',10);
+    var bookIdx = Math.floor(x/4);
+    var bookColors = ['#8b2500','#1a4d1a','#1a1a6b','#6b4a2a'];
+    return vary(bookColors[bookIdx % 4], 12);
+  });
   var img=g.getImageData(8*16,0,16,16);
   for(var p=0;p<img.data.length;p+=4){ if(trnd()<0.12){ img.data[p]+=20; img.data[p+1]+=25; img.data[p+2]+=10; } }
   g.putImageData(img,8*16,0);
@@ -2004,6 +2201,13 @@ function doBreak(){
 function doPlace(){
   var hit=raycast(eyePos(), lookDir(), REACH);
   if(!hit) return;
+  // Right-click Crafting Table opens 3x3 grid
+  if(hit.id===CRAFTTABLE){
+    craft3x3Open=true;
+    inv.craft3x3=[null,null,null,null,null,null,null,null,null,null];
+    openInventory();
+    return;
+  }
   var px=hit.x+hit.nx, py=hit.y+hit.ny, pz=hit.z+hit.nz;
   var cur=getBlock(px,py,pz);
   if(cur!==AIR&&cur!==WATER) return;
@@ -2027,8 +2231,8 @@ function doPlace(){
 // ---------- MOBS ----------
 var MOB_DEFS={
   pig:    {name:'Pig', hp:10, spd:2.2, dmg:0, hostile:false, hw:0.35, hh:1.0, body:[0.95,0.62,0.72], head:[0.95,0.72,0.8], drop:['Porkchop',5]},
-  cow:    {name:'Cow', hp:12, spd:2.0, dmg:0, hostile:false, hw:0.4, hh:1.2, body:[0.42,0.28,0.18], head:[0.5,0.35,0.25], drop:['Beef',4]},
-  sheep:  {name:'Sheep', hp:8, spd:1.8, dmg:0, hostile:false, hw:0.35, hh:1.0, body:[0.92,0.92,0.92], head:[0.85,0.85,0.85], drop:['Mutton',3]},
+  cow:    {name:'Cow', hp:12, spd:2.0, dmg:0, hostile:false, hw:0.4, hh:1.2, body:[0.42,0.28,0.18], head:[0.5,0.35,0.25], drop:['Beef',4], extraDrop:['Leather',1]},
+  sheep:  {name:'Sheep', hp:8, spd:1.8, dmg:0, hostile:false, hw:0.35, hh:1.0, body:[0.92,0.92,0.92], head:[0.85,0.85,0.85], drop:['Mutton',3], extraDrop:['Wool',2]},
   chicken:{name:'Chicken', hp:6, spd:2.8, dmg:0, hostile:false, hw:0.25, hh:0.7, body:[0.95,0.95,0.95], head:[0.95,0.75,0.2], drop:['Feather',1]},
   zombie: {name:'Zombie', hp:20, spd:2.6, dmg:4, hostile:true, hw:0.35, hh:1.8, body:[0.25,0.5,0.3], head:[0.35,0.65,0.4], drop:['Rotten Flesh',1]},
   skeleton:{name:'Skeleton', hp:16, spd:3.0, dmg:3, hostile:true, hw:0.35, hh:1.8, body:[0.8,0.8,0.75], head:[0.9,0.9,0.85], drop:['Bone',1]},
@@ -2044,7 +2248,9 @@ var DROP_INFO={'Porkchop':{c:[1,0.55,0.6],nut:5},'Beef':{c:[0.6,0.3,0.2],nut:4},
   'Rotten Flesh':{c:[0.5,0.6,0.4],nut:1},'Bone':{c:[0.9,0.9,0.85],nut:1},
   'String':{c:[0.85,0.85,0.85],nut:1},'Gunpowder':{c:[0.3,0.3,0.3],nut:0},
   'Blaze Rod':{c:[1,0.65,0.1],nut:0},'Magma Cream':{c:[0.9,0.4,0.1],nut:0},
-  'Gold Nugget':{c:[0.96,0.84,0.26],nut:0}};
+  'Gold Nugget':{c:[0.96,0.84,0.26],nut:0},'Leather':{c:[0.55,0.33,0.15],nut:0},'Book':{c:[0.6,0.45,0.25],nut:0},
+  'Wool':{c:[0.92,0.92,0.92],nut:0},'Door':{c:[0.65,0.49,0.23],nut:0},'Fence':{c:[0.65,0.49,0.23],nut:0},
+  'Bed':{c:[0.8,0.2,0.2],nut:0},'Chest':{c:[0.65,0.49,0.23],nut:0},'Crafting Table':{c:[0.65,0.49,0.23],nut:0}};
 var mobs=[], pickups=[], mobId=1;
 var spawnTimer=0;
 
@@ -2111,6 +2317,10 @@ function hurtMob(m, dmg, kx, kz){
     var d=MOB_DEFS[m.type];
     pickups.push({x:m.x,y:m.y+0.6,z:m.z,vx:(Math.random()-0.5)*3,vy:4,vz:(Math.random()-0.5)*3,
       kind:d.drop[0], nut:d.drop[1], t:0});
+    if(d.extraDrop){
+      pickups.push({x:m.x+(Math.random()-0.5)*0.5,y:m.y+0.6,z:m.z+(Math.random()-0.5)*0.5,vx:(Math.random()-0.5)*3,vy:4,vz:(Math.random()-0.5)*3,
+        kind:d.extraDrop[0], nut:d.extraDrop[1], t:0});
+    }
     if(pickups.length>30) pickups.shift();
     showMsg(d.name+' slain! ('+kills+' kills)');
   } else if(!MOB_DEFS[m.type].hostile){
@@ -2670,7 +2880,7 @@ document.addEventListener('pointerlockchange', function(){
   }
 });
 // ---------- Inventory (E) & dropping (Q) ----------
-var BLOCK_RGB={1:[0.42,0.75,0.19],2:[0.54,0.37,0.24],3:[0.55,0.55,0.55],4:[0.42,0.29,0.16],5:[0.25,0.49,0.17],6:[0.89,0.84,0.61],7:[0.65,0.49,0.23],8:[0.81,0.91,0.96],9:[0.64,0.29,0.23],10:[0.2,0.47,0.86],11:[0.3,0.3,0.3],12:[0.85,0.63,0.48],13:[0.96,0.84,0.26],14:[0.43,0.95,0.95],15:[0.95,0.97,0.97],16:[0.25,0.57,0.25],17:[0.55,0.1,0.05],18:[0.4,0.2,0.8],19:[0.1,0.05,0.18],20:[0.42,0.33,0.18],21:[1,0.85,0.3],22:[1,0.4,0]};
+var BLOCK_RGB={1:[0.42,0.75,0.19],2:[0.54,0.37,0.24],3:[0.55,0.55,0.55],4:[0.42,0.29,0.16],5:[0.25,0.49,0.17],6:[0.89,0.84,0.61],7:[0.65,0.49,0.23],8:[0.81,0.91,0.96],9:[0.64,0.29,0.23],10:[0.2,0.47,0.86],11:[0.3,0.3,0.3],12:[0.85,0.63,0.48],13:[0.96,0.84,0.26],14:[0.43,0.95,0.95],15:[0.95,0.97,0.97],16:[0.25,0.57,0.25],17:[0.55,0.1,0.05],18:[0.4,0.2,0.8],19:[0.1,0.05,0.18],20:[0.42,0.33,0.18],21:[1,0.85,0.3],22:[1,0.4,0],23:[0.65,0.49,0.23],24:[0.55,0.4,0.25]};
 function openInventory(){
   if(invOpen||!playing) return;
   invOpen=true;
@@ -2683,6 +2893,16 @@ function openInventory(){
 function closeInventory(relock){
   if(!invOpen) return;
   invOpen=false;
+  // Return 3x3 crafting grid items to inventory
+  if(craft3x3Open){
+    for(var i=0;i<9;i++){
+      if(inv.craft3x3[i]){
+        invAdd(inv.craft3x3[i].type, inv.craft3x3[i].id, inv.craft3x3[i].count);
+        inv.craft3x3[i]=null;
+      }
+    }
+    craft3x3Open=false;
+  }
   // Return cursor item to inventory or drop
   if(inv.cursor){
     if(!invAdd(inv.cursor.type, inv.cursor.id, inv.cursor.count)){
