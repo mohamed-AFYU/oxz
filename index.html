@@ -1733,13 +1733,32 @@ function hurtMob(m, dmg, kx, kz){
 }
 function explode(x, y, z, radius, hurtMobs){
   var r=Math.ceil(radius);
+  var explodedBlocks=[];
   for(var dx=-r;dx<=r;dx++) for(var dy=-r;dy<=r;dy++) for(var dz=-r;dz<=r;dz++){
     if(dx*dx+dy*dy+dz*dz>radius*radius) continue;
     var bx=Math.floor(x)+dx, by=Math.floor(y)+dy, bz=Math.floor(z)+dz;
     if(by<=1) continue;
     var id=getBlock(bx,by,bz);
-    if(id!==AIR&&id!==WATER) setBlock(bx,by,bz,AIR);
+    if(id!==AIR&&id!==WATER){
+      setBlock(bx,by,bz,AIR);
+      if(BLOCKS[id]) explodedBlocks.push({id:id, x:bx+0.5, y:by+0.5, z:bz+0.5});
+    }
   }
+  var dropCount=Math.min(explodedBlocks.length, 12);
+  for(var i=0;i<dropCount;i++){
+    var b=explodedBlocks[Math.floor(Math.random()*explodedBlocks.length)];
+    var dirx=b.x-x, diry=b.y-y, dirz=b.z-z;
+    var dist=Math.max(0.1, Math.hypot(dirx,diry,dirz));
+    pickups.push({
+      x:b.x, y:b.y, z:b.z,
+      vx:dirx/dist*5+(Math.random()-0.5)*3,
+      vy:Math.abs(diry/dist)*6+2+Math.random()*2,
+      vz:dirz/dist*5+(Math.random()-0.5)*3,
+      kind:BLOCKS[b.id].name, nut:0, t:0,
+      col:BLOCK_RGB[b.id]||[0.5,0.5,0.5]
+    });
+  }
+  if(pickups.length>60) pickups.splice(0, pickups.length-60);
   var pdist=Math.sqrt((player.x-x)*(player.x-x)+((player.y+1-y)*(player.y+1-y))+(player.z-z)*(player.z-z));
   if(pdist<radius*2.2){ damage(Math.round(30*(1-pdist/(radius*2.2))+4)); }
   if(hurtMobs) for(var i=0;i<mobs.length;i++){
