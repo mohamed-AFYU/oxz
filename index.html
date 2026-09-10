@@ -417,6 +417,24 @@ function useToolDurability() {
   buildHotbar();
 }
 
+function eatFood(idx) {
+  var slot = inv.slots[idx];
+  if (!slot || slot.type !== 'item') return false;
+  var it = ITEMS[slot.id];
+  if (!it || it.food <= 0) return false;
+  if (hunger >= 20) { showMsg('Already full!'); return false; }
+  hunger = Math.min(20, hunger + it.food);
+  slot.count--;
+  if (slot.count <= 0) inv.slots[idx] = null;
+  updateBars();
+  sfxEat();
+  showMsg('Ate ' + it.name + ' (+' + it.food + ' hunger)');
+  if (invOpen) buildInvGrid();
+  buildHotbar();
+  inv.dirty = true;
+  return true;
+}
+
 function getWeaponDamage() {
   var slot = inv.slots[selIndex];
   if (!slot || slot.type !== 'item') return 1; // bare hand
@@ -922,6 +940,7 @@ function invSlotClick(idx, btn, e) {
 }
 
 function invSlotRightClick(idx, btn, e) {
+  if (eatFood(idx)) return;
   invSlotClick(idx, 'right', e);
 }
 
@@ -1699,6 +1718,7 @@ function sfxPop(){ tone(520, 0.12, 'sine', 0.3, 940); }
 function sfxExplode(){ noiseBurst(0.7, 0.9, 260); tone(65, 0.5, 'sine', 0.55, 28); }
 function sfxBird(){ var f=2200+Math.random()*1600; tone(f,0.09,'sine',0.10,f*1.4); setTimeout(function(){tone(f*1.2,0.08,'sine',0.08,f*0.8);},110); }
 function sfxCricket(){ for(var i=0;i<3;i++)(function(i){setTimeout(function(){tone(4200,0.04,'sine',0.05);},i*70);})(i); }
+function sfxEat(){ tone(300,0.08,'sine',0.2,500); setTimeout(function(){tone(350,0.08,'sine',0.15,400);},80); setTimeout(function(){tone(280,0.1,'sine',0.12,300);},160); }
 
 // ---------- Chunk meshing ----------
 function buildChunkMesh(c){
