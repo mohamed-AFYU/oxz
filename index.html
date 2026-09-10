@@ -48,6 +48,7 @@
   #loading { font-family:monospace; color:#8f8; margin-top:10px; font-size:13px; }
   #vignette { position:absolute; inset:0; pointer-events:none; z-index:10; background:radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,.45) 100%); }
   #damage-flash { position:absolute; inset:0; pointer-events:none; z-index:30; background:radial-gradient(ellipse at center, transparent 40%, rgba(255,0,0,.55) 100%); opacity:0; transition:opacity .15s; }
+  #lightning-flash { position:absolute; inset:0; pointer-events:none; z-index:31; background:rgba(255,255,255,1); opacity:0; transition:opacity .05s linear; }
   #msg { position:absolute; top:70px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.7); color:#fff; padding:8px 16px; border-radius:6px; font-size:14px; z-index:25; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
   /* F3 Debug Overlay */
   #debug-overlay { position:absolute; top:10px; left:10px; background:rgba(0,0,0,.72); color:#fff; padding:8px 12px; border-radius:6px; font:12px/1.6 monospace; z-index:40; pointer-events:none; white-space:pre; min-width:260px; }
@@ -117,6 +118,7 @@
 <canvas id="game"></canvas>
 <div id="vignette"></div>
 <div id="damage-flash"></div>
+<div id="lightning-flash"></div>
 <div id="hud">
   <div id="fps">FPS: --<br><span id="coords"></span></div>
   <div id="selected-label">Grass</div>
@@ -1221,6 +1223,7 @@ function switchDimension(){
     }
   }
   player.vx=player.vy=player.vz=0; portalTimer=0; portalCooldown=3.0;
+  weatherManual=false; weatherManualTimer=0;
   // Unload distant chunks from inactive dimension
   var pc=chunkCoords(player.x, player.z);
   var inactiveChunks=(currentDimension==='nether')?overworldChunks:netherChunks;
@@ -1653,6 +1656,7 @@ function respawn(){
   if(currentDimension==='nether'){
     netherChunks=chunks; chunks=overworldChunks; currentDimension='overworld';
     portalCooldown = 3.0; portalTimer = 0;
+    weatherManual=false; weatherManualTimer=0;
     updateStreaming(true);
   }
   var sy=surfaceY(spawnPt.x, spawnPt.z);
@@ -2024,6 +2028,7 @@ function renderMobsEtc(){
 // ---------- Weather (rain / snow / storm) ----------
 var weather={type:'clear', t:0, dur:25};
 var weatherManual=false;
+var weatherManualTimer=0;
 var WEATHER_STATES=['clear','rain','snow','storm'];
 var WEATHER_ICONS={clear:'☀',rain:'🌧',snow:'🌨',storm:'⛈'};
 var WEATHER_LABELS={clear:'Clear',rain:'Rain',snow:'Snow',storm:'Storm'};
@@ -2042,6 +2047,8 @@ function cycleWeather(){
   var idx=WEATHER_STATES.indexOf(weather.type);
   weather.type=WEATHER_STATES[(idx+1)%WEATHER_STATES.length];
   weatherManual=true;
+  weatherManualTimer=0;
+  weather.t=0;
   updateWeatherBtn();
   showMsg('Weather: '+WEATHER_LABELS[weather.type]);
 }
@@ -2051,15 +2058,24 @@ function updateWeatherBtn(){
 }
 function updateWeather(dt){
   if(currentDimension==='nether'){ weather.type='clear'; updateWeatherBtn(); return; }
+  if(weatherManual){
+    weatherManualTimer+=dt;
+    if(weatherManualTimer>90){
+      weatherManual=false;
+      weather.t=0;
+      weatherManualTimer=0;
+      showMsg('Auto weather restored');
+    }
+  }
   if(!weatherManual){
     weather.t+=dt;
     if(weather.t>weather.dur){
       weather.t=0; weather.dur=25+Math.random()*35;
       var b=biomeAt(Math.floor(player.x),Math.floor(player.z));
       var r=Math.random();
-      if(b.biome==='snow') weather.type = r<0.5?'snow':'clear';
+      if(b.biome==='snow') weather.type = r<0.5?'snow':r<0.55?'storm':'clear';
       else if(b.biome==='desert'||b.biome==='ocean'||b.biome==='beach') weather.type = r<0.12?'rain':'clear';
-      else weather.type = r<0.38?'rain':'clear';
+      else weather.type = r<0.05?'storm':r<0.43?'rain':'clear';
       updateWeatherBtn();
     }
   }
@@ -2085,7 +2101,7 @@ function renderWeather(){
   var arr=[];
   var rain=weather.type==='rain'||weather.type==='storm';
   var storm=weather.type==='storm';
-  var dropCount=storm?drops.length:rain?160:drops.length;
+  var dropCount=storm?drops.length:rain?160:180;
   for(var i=0;i<dropCount;i++){
     var d=drops[i];
     var speed=rain?(storm?30:22):2.2;
@@ -2110,8 +2126,11 @@ function renderWeather(){
   if(rain){ gl.uniform4f(uColF,0.6,0.72,1.0,storm?0.7:0.55); gl.drawArrays(gl.LINES,0,arr.length/3); }
   else { gl.uniform4f(uColF,1,1,1,0.9); gl.drawArrays(gl.LINES,0,arr.length/3); }
   if(lightningFlash>0){
-    gl.clearColor(lightningFlash,lightningFlash,lightningFlash*0.95,1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    var lf=document.getElementById('lightning-flash');
+    if(lf){lf.style.opacity=lightningFlash*0.85;}
+  } else {
+    var lf=document.getElementById('lightning-flash');
+    if(lf){lf.style.opacity=0;}
   }
 }
 
