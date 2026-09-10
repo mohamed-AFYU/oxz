@@ -1,34 +1,8 @@
 {
-  "task": "عايز دراسه وتحسين الجرافيك وجعله افضل بكثير",
+  "task": "فيه مشكله في الجرافيك الجديد ، الوان اللعبه بقا فيها مشاكل. اكتشف كل المشاكل اللي فالجرافيك وابدا صلحها بعمق وتركيز شديد",
   "max_cycles": 30,
-  "cycle": 3,
-  "status": "clean",
+  "cycle": 0,
+  "status": "building",
   "findings": [],
-  "history": [
-    {
-      "agent": "review",
-      "cycle": 0,
-      "result": "issues_found"
-    },
-    {
-      "agent": "review",
-      "cycle": 1,
-      "result": "issues_found"
-    },
-    {
-      "agent": "review",
-      "cycle": 2,
-      "result": "issues_found"
-    },
-    {
-      "agent": "review",
-      "cycle": 3,
-      "result": "clean"
-    },
-    {
-      "agent": "verify",
-      "cycle": 3,
-      "result": "clean"
-    }
-  ]
+  "history": []
 }
