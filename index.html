@@ -47,7 +47,7 @@
   .controls { text-align:left; font-size:14px; line-height:1.8; margin-top:14px; background:rgba(0,0,0,.45); padding:12px 16px; border-radius:9px; border:1px solid rgba(255,255,255,.05); }
   .controls b { color:#ffe27a; display:inline-block; min-width:150px; text-shadow:0 0 6px rgba(255,226,122,.15); }
   #loading { font-family:monospace; color:#8f8; margin-top:10px; font-size:13px; }
-  #vignette { position:absolute; inset:0; pointer-events:none; z-index:10; background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.3) 85%, rgba(0,0,0,.55) 100%); }
+  #vignette { position:absolute; inset:0; pointer-events:none; z-index:10; background:radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,.2) 85%, rgba(0,0,0,.4) 100%); }
   #damage-flash { position:absolute; inset:0; pointer-events:none; z-index:30; background:radial-gradient(ellipse at center, rgba(255,0,0,.15) 20%, rgba(255,0,0,.5) 100%); opacity:0; transition:opacity .12s; }
   #lightning-flash { position:absolute; inset:0; pointer-events:none; z-index:31; background:rgba(255,255,255,1); opacity:0; transition:opacity .04s linear; }
   #msg { position:absolute; top:70px; left:50%; transform:translateX(-50%); background:linear-gradient(135deg,rgba(0,0,0,.8),rgba(0,0,0,.6)); color:#fff; padding:10px 20px; border-radius:8px; font-size:14px; z-index:25; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; border:1px solid rgba(255,255,255,.08); text-shadow:0 1px 2px rgba(0,0,0,.5); }
@@ -1326,13 +1326,12 @@ var fsSrc=[
 'float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}',
 'void main(){',
 ' vec4 t=texture2D(uTex,vUV);',' if(t.a<0.05) discard;',
-' float l=vShade*(0.3+0.7*uSun);',' l=clamp(l,0.06,1.2);',
+' float l=vShade*(0.3+0.7*uSun);',' l=clamp(l,0.08,1.15);',
 ' vec3 c=t.rgb;',
-' c*=vec3(1.02,1.0,0.98);',
 ' float brightness=dot(c,vec3(0.299,0.587,0.114));',
-' c=mix(c,vec3(brightness),-0.08);',
-' c+=vec3(0.01,0.005,0.0);',
-' c=mix(c,c*vec3(1.05,1.02,0.97),uSun);',
+' c=mix(c,vec3(brightness),0.04);',
+' c+=vec3(0.005,0.003,0.0);',
+' c=mix(c,c*vec3(1.03,1.01,0.98),uSun);',
 ' float f=clamp((vDist-uFogNear)/(uFogFar-uFogNear),0.0,1.0);',
 ' f=f*f*(3.0-2.0*f);',
 ' c=mix(c,uFog,f);',
@@ -1367,10 +1366,10 @@ var vsMob=['attribute vec3 aPos;','attribute vec3 aCol;','varying vec3 vC;','var
 var fsMob=['precision mediump float;','varying vec3 vC;','varying float vD;','varying vec3 vWP;',
 'uniform vec3 uFog;','uniform float uFogNear;','uniform float uFogFar;','uniform float uSun;',
 'void main(){',
-' float l=0.4+0.6*uSun;',
+' float l=0.35+0.65*uSun;',
 ' vec3 c=vC*l;',
-' c+=vec3(0.01,0.005,0.0);',
-' c=mix(c,c*vec3(1.05,1.02,0.97),uSun);',
+' c+=vec3(0.005,0.003,0.0);',
+' c=mix(c,c*vec3(1.03,1.01,0.98),uSun);',
 ' float f=clamp((vD-uFogNear)/(uFogFar-uFogNear),0.0,1.0);',
 ' f=f*f*(3.0-2.0*f);',
 ' c=mix(c,uFog,f);',
@@ -1527,7 +1526,7 @@ function buildChunkMesh(c){
             if(cn[1]===1) vy-=yTopDrop;
             var u=cn[3]?tu1:tu0;
             var v=1-(cn[4]?tv1:tv0);
-            var shade=FACES[f].shade*(0.55+0.45*ao[k]);
+            var shade=FACES[f].shade*(0.50+0.50*ao[k]);
             arr.push(vx,vy,vz, u,v, shade);
           }
         }
@@ -2160,7 +2159,7 @@ function renderMobsEtc(){
   gl.uniformMatrix4fv(uProjM,false,projMat);
   gl.uniformMatrix4fv(uViewM,false,viewMat);
   gl.uniform3f(uFogM,fogColor[0],fogColor[1],fogColor[2]);
-  gl.uniform1f(uFogNearM,26); gl.uniform1f(uFogFarM,80);
+  gl.uniform1f(uFogNearM,30); gl.uniform1f(uFogFarM,100);
   gl.uniform1f(uSunM,sunLevel);
   gl.bindBuffer(gl.ARRAY_BUFFER,mobVBO);
   gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(arr),gl.DYNAMIC_DRAW);
@@ -2202,8 +2201,9 @@ function renderParticles(){
   for(var i=0;i<particles.length;i++){
     var p=particles[i];
     var alpha=p.life/p.maxLife;
-    var s=p.size*alpha;
-    var cr=p.r*alpha, cg=p.g*alpha, cb=p.b*alpha;
+    var fadeAlpha=alpha*alpha*(3-2*alpha);
+    var s=p.size*(0.5+0.5*alpha);
+    var cr=p.r*(0.3+0.7*fadeAlpha), cg=p.g*(0.3+0.7*fadeAlpha), cb=p.b*(0.3+0.7*fadeAlpha);
     arr.push(p.x-s,p.y-s,p.z, cr,cg,cb, p.x+s,p.y-s,p.z, cr,cg,cb, p.x+s,p.y+s,p.z, cr,cg,cb);
     arr.push(p.x-s,p.y-s,p.z, cr,cg,cb, p.x+s,p.y+s,p.z, cr,cg,cb, p.x-s,p.y+s,p.z, cr,cg,cb);
   }
@@ -2211,7 +2211,7 @@ function renderParticles(){
   gl.uniformMatrix4fv(uProjM,false,projMat);
   gl.uniformMatrix4fv(uViewM,false,viewMat);
   gl.uniform3f(uFogM,fogColor[0],fogColor[1],fogColor[2]);
-  gl.uniform1f(uFogNearM,26); gl.uniform1f(uFogFarM,80);
+  gl.uniform1f(uFogNearM,30); gl.uniform1f(uFogFarM,100);
   gl.uniform1f(uSunM,sunLevel);
   gl.disable(gl.CULL_FACE);
   gl.depthMask(false);
@@ -2326,8 +2326,8 @@ function renderWeather(){
   gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(arr),gl.DYNAMIC_DRAW);
   gl.enableVertexAttribArray(aPosF);
   gl.vertexAttribPointer(aPosF,3,gl.FLOAT,false,0,0);
-  if(rain){ gl.uniform4f(uColF,0.6,0.72,1.0,storm?0.7:0.55); gl.drawArrays(gl.LINES,0,arr.length/3); }
-  else { gl.uniform4f(uColF,1,1,1,0.9); gl.drawArrays(gl.LINES,0,arr.length/3); }
+  if(rain){ var rR=lerp(0.6,fogColor[0],0.3), rG=lerp(0.72,fogColor[1],0.3), rB=lerp(1.0,fogColor[2],0.2); gl.uniform4f(uColF,rR,rG,rB,storm?0.65:0.5); gl.drawArrays(gl.LINES,0,arr.length/3); }
+  else { var sR=lerp(1,fogColor[0],0.15), sG=lerp(1,fogColor[1],0.15), sB=lerp(1,fogColor[2],0.1); gl.uniform4f(uColF,sR,sG,sB,0.85); gl.drawArrays(gl.LINES,0,arr.length/3); }
   if(lightningFlash>0){
     if(lightningFlashEl){lightningFlashEl.style.opacity=lightningFlash*0.85;}
   } else {
@@ -2366,7 +2366,7 @@ function render(){
   gl.uniformMatrix4fv(uProj,false,projMat);
   gl.uniformMatrix4fv(uView,false,viewMat);
   gl.uniform3f(uFog,fogColor[0],fogColor[1],fogColor[2]);
-  gl.uniform1f(uFogNear,26); gl.uniform1f(uFogFar,80);
+  gl.uniform1f(uFogNear,30); gl.uniform1f(uFogFar,100);
   gl.uniform1f(uSun,sunLevel);
   gl.uniform1f(uTime,perfTime);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,tex);
@@ -2387,12 +2387,10 @@ function render(){
     var horizonR=lerp(skyR,0.7,0.3), horizonG=lerp(skyG,0.75,0.3), horizonB=lerp(skyB,0.85,0.3);
     var dayT=(timeOfDay-0.25)/0.5;
     if(dayT>=0&&dayT<=1){
-      var sunAng=(dayT-0.5)*Math.PI;
       horizonR=lerp(skyR,0.95,Math.max(0,1-Math.abs(dayT-0.5)*5));
       horizonG=lerp(skyG,0.55,Math.max(0,1-Math.abs(dayT-0.5)*5));
       horizonB=lerp(skyB,0.35,Math.max(0,1-Math.abs(dayT-0.5)*5));
     }
-    var skyVerts=[];
     var cx2=player.x, cy2=player.y, cz2=player.z;
     var domeR=200, domeSeg=12;
     for(var si=0;si<domeSeg;si++){
@@ -2400,6 +2398,10 @@ function render(){
       var ang1=t1*Math.PI*0.5, ang2=t2*Math.PI*0.5;
       var y1=cy2+Math.cos(ang1)*domeR, y2=cy2+Math.cos(ang2)*domeR;
       var r1=Math.sin(ang1)*domeR, r2=Math.sin(ang2)*domeR;
+      var ringFrac1=t1, ringFrac2=t2;
+      var cR1=lerp(skyR,horizonR,ringFrac1), cG1=lerp(skyG,horizonG,ringFrac1), cB1=lerp(skyB,horizonB,ringFrac1);
+      var cR2=lerp(skyR,horizonR,ringFrac2), cG2=lerp(skyG,horizonG,ringFrac2), cB2=lerp(skyB,horizonB,ringFrac2);
+      var skyVerts=[];
       for(var sj=0;sj<8;sj++){
         var a1=sj/8*Math.PI*2, a2=(sj+1)/8*Math.PI*2;
         var x1=cx2+Math.cos(a1)*r1, z1=cz2+Math.sin(a1)*r1;
@@ -2409,13 +2411,14 @@ function render(){
         skyVerts.push(x1,y1,z1, x2,y1,z2, x3,y2,z3);
         skyVerts.push(x2,y1,z2, x4,y2,z4, x3,y2,z3);
       }
+      gl.bindBuffer(gl.ARRAY_BUFFER,cloudVBO);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(skyVerts),gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(aPosF);
+      gl.vertexAttribPointer(aPosF,3,gl.FLOAT,false,0,0);
+      var avgR=(cR1+cR2)*0.5, avgG=(cG1+cG2)*0.5, avgB=(cB1+cB2)*0.5;
+      gl.uniform4f(uColF,avgR,avgG,avgB,1.0);
+      gl.drawArrays(gl.TRIANGLES,0,skyVerts.length/3);
     }
-    gl.bindBuffer(gl.ARRAY_BUFFER,cloudVBO);
-    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(skyVerts),gl.DYNAMIC_DRAW);
-    gl.enableVertexAttribArray(aPosF);
-    gl.vertexAttribPointer(aPosF,3,gl.FLOAT,false,0,0);
-    gl.uniform4f(uColF,horizonR,horizonG,horizonB,1.0);
-    gl.drawArrays(gl.TRIANGLES,0,skyVerts.length/3);
 
     // Sun
     if(dayT>0.05&&dayT<0.95){
@@ -2559,8 +2562,12 @@ function render(){
     gl.enableVertexAttribArray(aPosF);
     gl.vertexAttribPointer(aPosF,3,gl.FLOAT,false,0,0);
     var cloudAlpha=0.3+0.2*sunLevel;
-    if(weather.type==='rain'||weather.type==='storm') cloudAlpha*=1.5;
-    gl.uniform4f(uColF,1,1,1,cloudAlpha);
+    if(weather.type==='rain'||weather.type==='storm') cloudAlpha*=1.3;
+    var cloudTint=clamp01(1-Math.abs(dayT-0.5)*5);
+    var cR=lerp(1,fogColor[0]*1.3,cloudTint*0.35);
+    var cG=lerp(1,fogColor[1]*1.2,cloudTint*0.35);
+    var cB=lerp(1,fogColor[2]*1.1,cloudTint*0.35);
+    gl.uniform4f(uColF,cR,cG,cB,cloudAlpha);
     gl.drawArrays(gl.TRIANGLES,0,verts.length/3);
   }
   gl.depthMask(true);
