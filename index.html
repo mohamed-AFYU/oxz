@@ -99,6 +99,9 @@
     <div class="bar" id="armor"></div>
     <div class="bar" id="health"></div>
     <div class="bar" id="hunger"></div>
+    <div id="eat-bar" style="display:none;width:100px;height:8px;background:rgba(0,0,0,.5);border-radius:4px;overflow:hidden;">
+      <div id="eat-fill" style="height:100%;background:#8B4513;width:0%;transition:width 0.1s;"></div>
+    </div>
   </div>
   <div id="hotbar"></div>
 </div>
@@ -126,7 +129,7 @@
     <div style="font-size:15px;color:#cfc;">Explore infinite biomes, mine ores in caves, fight mobs at night. The world generates around you forever.</div>
     <div class="controls">
       <div><b>W A S D</b> Move &nbsp; <b>Mouse</b> Look &nbsp; <b>Space</b> Jump / Swim</div>
-      <div><b>Left Click</b> Attack / Break &nbsp; <b>Right Click</b> Place block &nbsp; <b>Middle Click</b> Pick block</div>
+      <div><b>Left Click</b> Attack / Break &nbsp; <b>Right Click</b> Place block / Eat food &nbsp; <b>Middle Click</b> Pick block</div>
       <div><b>1 &ndash; 9</b> Hotbar &nbsp; <b>Wheel</b> Cycle &nbsp; <b>E</b> Inventory &nbsp; <b>C</b> Crafting &nbsp; <b>Q</b> Drop item</div>
       <div><b>F</b> Fly &nbsp; <b>R</b> Morning &nbsp; <b>Shift</b> Sprint &nbsp; <b>Esc</b> Pause</div>
       <div style="color:#ffe27a;margin-top:6px;">--- Navigation ---</div>
@@ -144,7 +147,7 @@
   <div class="panel">
     <div class="controls">
       <div><b>WASD / Mouse</b> Move &amp; look</div>
-      <div><b>Left / Right click</b> Attack-Break / Place</div>
+      <div><b>Left / Right click</b> Attack-Break / Place or Eat food</div>
       <div><b>Middle Click</b> Pick block &nbsp; <b>1-9 / Wheel</b> Hotbar</div>
       <div><b>E</b> Inventory &nbsp; <b>C</b> Crafting &nbsp; <b>Q</b> Drop &nbsp; <b>F</b> Fly &nbsp; <b>R</b> Morning</div>
       <div style="color:#ffe27a;margin-top:6px;">--- Navigation ---</div>
@@ -244,6 +247,17 @@ defTool(NETHERITE_SWORD,'Netherite Sword','sword','netherite',1,14,2031);
 // Leather item
 var LEATHER=52;
 var BLAZE_ROD=58;
+// Food item IDs
+var PORKCHOP=59, BEEF=60, MUTTON=61, ROTTEN_FLESH=62, FEATHER_FOOD=63;
+// Food metadata: id -> {name, nutrition, eatTime, saturation}
+var FOODS={};
+function defFood(id,nm,nu,et,sat){ FOODS[id]={name:nm,nutrition:nu,eatTime:et,saturation:sat}; }
+defFood(PORKCHOP,'Cooked Porkchop',5,0.8,0.6);
+defFood(BEEF,'Cooked Beef',4,0.8,0.5);
+defFood(MUTTON,'Cooked Mutton',3,0.7,0.4);
+defFood(ROTTEN_FLESH,'Rotten Flesh',1,0.6,0.1);
+defFood(FEATHER_FOOD,'Feather',0,0,0); // not actually food, just for inventory
+function isFood(id){ return !!FOODS[id]; }
 // Armor IDs (36-51)
 var LEATHER_HELM=36, LEATHER_CHEST=37, LEATHER_LEGS=38, LEATHER_BOOTS=39;
 var IRON_HELM=40, IRON_CHEST=41, IRON_LEGS=42, IRON_BOOTS=43;
@@ -311,7 +325,7 @@ var RECIPES=[
   {result:{id:NETHERITE_LEGS,n:1},ing:[{id:DIAM,n:5},{id:NETHERRACK,n:4}]},
   {result:{id:NETHERITE_BOOTS,n:1},ing:[{id:DIAM,n:2},{id:NETHERRACK,n:4}]}
 ];
-function getItemName(id){ if(TOOLS[id]) return TOOLS[id].name; if(ARMOR[id]) return ARMOR[id].name; if(id===LEATHER) return 'Leather'; if(id===BLAZE_ROD) return 'Blaze Rod'; if(BLOCKS[id]) return BLOCKS[id].name; return 'Unknown'; }
+function getItemName(id){ if(TOOLS[id]) return TOOLS[id].name; if(ARMOR[id]) return ARMOR[id].name; if(FOODS[id]) return FOODS[id].name; if(id===LEATHER) return 'Leather'; if(id===BLAZE_ROD) return 'Blaze Rod'; if(BLOCKS[id]) return BLOCKS[id].name; return 'Unknown'; }
 function isTool(id){ return !!TOOLS[id]; }
 // Inventory: 36 slots (0-8 = hotbar, 9-35 = main inventory)
 var inv=[];
@@ -363,6 +377,7 @@ function invAdd(id,n,dur){
     }
     return 0;
   }
+  // Food items stack like regular blocks
   // try stacking into existing slots first (hotbar first 0-8, then 9-35)
   var left=n;
   for(var i=0;i<36&&left>0;i++){
@@ -990,6 +1005,7 @@ function sfxExplode(){ noiseBurst(0.7, 0.9, 260); tone(65, 0.5, 'sine', 0.55, 28
 function sfxBird(){ var f=2200+Math.random()*1600; tone(f,0.09,'sine',0.10,f*1.4); setTimeout(function(){tone(f*1.2,0.08,'sine',0.08,f*0.8);},110); }
 function sfxCricket(){ for(var i=0;i<3;i++)(function(i){setTimeout(function(){tone(4200,0.04,'sine',0.05);},i*70);})(i); }
 function sfxMine(){ tone(80+Math.random()*40, 0.04, 'square', 0.15); }
+function sfxEat(){ tone(300, 0.08, 'sine', 0.25); setTimeout(function(){tone(400, 0.08, 'sine', 0.2);},100); }
 
 // ---------- Chunk meshing ----------
 function buildChunkMesh(c){
@@ -1098,6 +1114,8 @@ var spawnPt={x:0.5,z:0.5};
 var keys={};
 var health=20, hunger=20, hungerTimer=0, hurtTimer=0, drownTimer=0, dead=false, kills=0;
 var witherTimer=0, witherTick=0;
+// Eating state
+var eating=false, eatProgress=0, eatTarget=0, eatFoodId=AIR;
 
 function collideBox(nx,ny,nz,hw,hh){
   var minX=nx-hw, maxX=nx+hw, minY=ny, maxY=ny+hh, minZ=nz-hw, maxZ=nz+hw;
@@ -1285,6 +1303,41 @@ function drawArmorIcon(g, armorId, sz){
     g.fillRect(sz*0.5,sz*0.6,sz*0.35,sz*0.25);
   }
 }
+function drawFoodIcon(g, foodId, sz){
+  var f=FOODS[foodId]; if(!f) return;
+  // Draw different food icons based on type
+  if(foodId===PORKCHOP){
+    // Porkchop - pink meat with bone
+    g.fillStyle='#FFB6C1';
+    g.fillRect(sz*0.2,sz*0.3,sz*0.6,sz*0.5);
+    g.fillStyle='#FFF';
+    g.fillRect(sz*0.4,sz*0.4,sz*0.2,sz*0.3);
+  } else if(foodId===BEEF){
+    // Beef - red meat
+    g.fillStyle='#8B0000';
+    g.fillRect(sz*0.2,sz*0.3,sz*0.6,sz*0.5);
+    g.fillStyle='#A52A2A';
+    g.fillRect(sz*0.25,sz*0.35,sz*0.5,sz*0.4);
+  } else if(foodId===MUTTON){
+    // Mutton - brown meat
+    g.fillStyle='#D2691E';
+    g.fillRect(sz*0.2,sz*0.3,sz*0.6,sz*0.5);
+    g.fillStyle='#CD853F';
+    g.fillRect(sz*0.25,sz*0.35,sz*0.5,sz*0.4);
+  } else if(foodId===ROTTEN_FLESH){
+    // Rotten flesh - green/brown
+    g.fillStyle='#556B2F';
+    g.fillRect(sz*0.2,sz*0.3,sz*0.6,sz*0.5);
+    g.fillStyle='#6B8E23';
+    g.fillRect(sz*0.25,sz*0.35,sz*0.5,sz*0.4);
+  } else if(foodId===FEATHER_FOOD){
+    // Feather - white
+    g.fillStyle='#FFFAFA';
+    g.fillRect(sz*0.35,sz*0.15,sz*0.3,sz*0.7);
+    g.fillStyle='#F5F5F5';
+    g.fillRect(sz*0.4,sz*0.2,sz*0.2,sz*0.6);
+  }
+}
 var msgT=null;
 function showMsg(t){ var m=document.getElementById('msg'); m.textContent=t; m.style.opacity=1; clearTimeout(msgT); msgT=setTimeout(function(){m.style.opacity=0;},2200); }
 
@@ -1392,10 +1445,10 @@ var MOB_DEFS={
   blaze:  {name:'Blaze', hp:20, spd:2.8, dmg:6, hostile:true, hw:0.35, hh:1.8, body:[1.0,0.7,0.0], head:[1.0,0.9,0.2], drop:['Blaze Rod',0]},
   witherskeleton:{name:'Wither Skeleton', hp:20, spd:2.4, dmg:5, hostile:true, hw:0.35, hh:1.8, body:[0.2,0.2,0.2], head:[0.1,0.1,0.1], drop:['Bone',1]}
 };
-var DROP_INFO={'Porkchop':{c:[1,0.55,0.6],nut:5},'Beef':{c:[0.6,0.3,0.2],nut:4},
-  'Mutton':{c:[0.8,0.45,0.4],nut:3},'Feather':{c:[0.95,0.95,0.95],nut:1},
-  'Rotten Flesh':{c:[0.5,0.6,0.4],nut:1},'Bone':{c:[0.9,0.9,0.85],nut:1,blockId:0,blockCount:1},
-  'String':{c:[0.85,0.85,0.85],nut:1},'Gunpowder':{c:[0.3,0.3,0.3],nut:0},
+var DROP_INFO={'Porkchop':{c:[1,0.55,0.6],nut:5,blockId:PORKCHOP,blockCount:1},'Beef':{c:[0.6,0.3,0.2],nut:4,blockId:BEEF,blockCount:1},
+  'Mutton':{c:[0.8,0.45,0.4],nut:3,blockId:MUTTON,blockCount:1},'Feather':{c:[0.95,0.95,0.95],nut:0,blockId:FEATHER_FOOD,blockCount:1},
+  'Rotten Flesh':{c:[0.5,0.6,0.4],nut:1,blockId:ROTTEN_FLESH,blockCount:1},'Bone':{c:[0.9,0.9,0.85],nut:0,blockId:0,blockCount:1},
+  'String':{c:[0.85,0.85,0.85],nut:0},'Gunpowder':{c:[0.3,0.3,0.3],nut:0},
   'Blaze Rod':{c:[1.0,0.7,0.1],nut:0,blockId:BLAZE_ROD,blockCount:1},'Coal':{c:[0.3,0.3,0.3],nut:0,blockId:COAL,blockCount:1}};
 var mobs=[], pickups=[], mobId=1;
 var spawnTimer=0;
@@ -1467,8 +1520,16 @@ function hurtMob(m, dmg, kx, kz){
   if(m.hp<=0){
     m.dead=true; kills++;
     var d=MOB_DEFS[m.type];
+    // Get food item ID from kind name
+    var foodId=AIR;
+    if(d.drop[0]==='Porkchop') foodId=PORKCHOP;
+    else if(d.drop[0]==='Beef') foodId=BEEF;
+    else if(d.drop[0]==='Mutton') foodId=MUTTON;
+    else if(d.drop[0]==='Rotten Flesh') foodId=ROTTEN_FLESH;
+    else if(d.drop[0]==='Feather') foodId=FEATHER_FOOD;
+    
     pickups.push({x:m.x,y:m.y+0.6,z:m.z,vx:(Math.random()-0.5)*3,vy:4,vz:(Math.random()-0.5)*3,
-      kind:d.drop[0], nut:d.drop[1], t:0});
+      kind:d.drop[0], nut:d.drop[1], t:0, blockId:foodId, blockCount:1});
     if(pickups.length>30) pickups.shift();
     // Cows also drop leather
     if(m.type==='cow'){
@@ -1613,9 +1674,32 @@ function updateMobs(dt){
           showMsg('Inventory full!');
         }
       } else {
-        hunger=Math.min(20,hunger+it.nut); updateBars();
-        showMsg('Picked up '+it.kind+(it.nut?' (+'+it.nut+' hunger)':''));
-        pickups.splice(p,1);
+        // Food items - add to inventory instead of auto-consuming
+        if(it.nut>0 && it.kind){
+          // Find food item ID from kind name
+          var foodId=AIR;
+          if(it.kind==='Porkchop') foodId=PORKCHOP;
+          else if(it.kind==='Beef') foodId=BEEF;
+          else if(it.kind==='Mutton') foodId=MUTTON;
+          else if(it.kind==='Rotten Flesh') foodId=ROTTEN_FLESH;
+          else if(it.kind==='Feather') foodId=FEATHER_FOOD;
+          
+          if(foodId!==AIR){
+            var added=invAdd(foodId, 1);
+            if(added>0){
+              showMsg('Picked up '+it.kind);
+              buildHotbar(); updateHand();
+              saveInv();
+              pickups.splice(p,1);
+            } else {
+              showMsg('Inventory full!');
+            }
+          } else {
+            pickups.splice(p,1);
+          }
+        } else {
+          pickups.splice(p,1);
+        }
       }
     }
   }
@@ -1996,10 +2080,21 @@ document.addEventListener('mousedown', function(e){
   if(hasMod(e)) return; // e.g. macOS Ctrl+click keeps its native behavior
   if(!playing||!locked||invOpen||craftOpen) return;
   if(e.button===0){ if(!attackMobs()) doBreak(); breakHeld=true; }
-  if(e.button===2){ doPlace(); }
+  if(e.button===2){
+    // Check if holding food - start eating
+    var held=inv[selIndex];
+    if(held.id && isFood(held.id) && FOODS[held.id].nutrition>0 && hunger<20){
+      eating=true; eatProgress=0; eatTarget=FOODS[held.id].eatTime; eatFoodId=held.id;
+    } else {
+      doPlace();
+    }
+  }
   if(e.button===1){ e.preventDefault(); pickBlock(); }
 });
-document.addEventListener('mouseup', function(e){ if(e.button===0) breakHeld=false; });
+document.addEventListener('mouseup', function(e){
+  if(e.button===0) breakHeld=false;
+  if(e.button===2) eating=false; // Stop eating on right-click release
+});
 document.addEventListener('contextmenu', function(e){
   // Suppress the menu only on the game canvas during active play;
   // everywhere else the browser menu works normally.
@@ -2025,8 +2120,10 @@ document.addEventListener('pointerlockchange', function(){
   }
 });
 // ---------- Inventory (E) & dropping (Q) ----------
-var BLOCK_RGB={1:[0.42,0.75,0.19],2:[0.54,0.37,0.24],3:[0.55,0.55,0.55],4:[0.42,0.29,0.16],5:[0.25,0.49,0.17],6:[0.89,0.84,0.61],7:[0.65,0.49,0.23],8:[0.81,0.91,0.96],9:[0.64,0.29,0.23],10:[0.2,0.47,0.86],11:[0.3,0.3,0.3],12:[0.85,0.63,0.48],13:[0.96,0.84,0.26],14:[0.43,0.95,0.95],15:[0.95,0.97,0.97],16:[0.25,0.57,0.25],17:[0.55,0.1,0.06],18:[0.5,0.2,0.8],19:[0.1,0.05,0.18],20:[0.42,0.3,0.15],21:[1.0,0.75,0.1],22:[1.0,0.5,0.0]};
+var BLOCK_RGB={1:[0.42,0.75,0.19],2:[0.54,0.37,0.24],3:[0.55,0.55,0.55],4:[0.42,0.29,0.16],5:[0.25,0.49,0.17],6:[0.89,0.84,0.61],7:[0.65,0.49,0.23],8:[0.81,0.91,0.96],9:[0.64,0.29,0.23],10:[0.2,0.47,0.86],11:[0.3,0.3,0.3],12:[0.85,0.63,0.48],13:[0.96,0.84,0.26],14:[0.43,0.95,0.95],15:[0.95,0.97,0.97],16:[0.25,0.57,0.25],17:[0.55,0.1,0.06],18:[0.5,0.2,0.8],19:[0.1,0.05,0.18],20:[0.42,0.3,0.15],21:[1.0,0.75,0.1],22:[1.0,0.5,0.0],59:[1,0.55,0.6],60:[0.6,0.3,0.2],61:[0.8,0.45,0.4],62:[0.5,0.6,0.4],63:[0.95,0.95,0.95]};
 var TOOL_RGB={}; TOOL_RGB[STICK]=[0.55,0.35,0.15]; TOOL_RGB[LEATHER]=[0.55,0.35,0.15]; TOOL_RGB[BLAZE_ROD]=[1.0,0.7,0.1];
+TOOL_RGB[PORKCHOP]=[1,0.55,0.6]; TOOL_RGB[BEEF]=[0.6,0.3,0.2]; TOOL_RGB[MUTTON]=[0.8,0.45,0.4];
+TOOL_RGB[ROTTEN_FLESH]=[0.5,0.6,0.4]; TOOL_RGB[FEATHER_FOOD]=[0.95,0.95,0.95];
 var _tm={wood:[0.55,0.42,0.1],stone:[0.55,0.55,0.55],iron:[0.8,0.8,0.8],diamond:[0.3,0.85,0.9],netherite:[0.25,0.2,0.3],leather:[0.55,0.35,0.15]};
 [WOOD_PICK,WOOD_AXE,WOOD_SHOVEL].forEach(function(id){TOOL_RGB[id]=_tm.wood;});
 [STONE_PICK,STONE_AXE,STONE_SHOVEL].forEach(function(id){TOOL_RGB[id]=_tm.stone;});
@@ -2498,6 +2595,11 @@ function drawBlockIcon(cv, id){
     g.strokeStyle='rgba(0,0,0,.5)'; g.strokeRect(0.5,0.5,31,31);
     return;
   }
+  if(isFood(id)){
+    drawFoodIcon(g, id, 32);
+    g.strokeStyle='rgba(0,0,0,.5)'; g.strokeRect(0.5,0.5,31,31);
+    return;
+  }
   if(id===LEATHER){
     g.fillStyle='#8B5A2B';
     g.fillRect(6,6,20,20);
@@ -2578,7 +2680,13 @@ function updateBars(){
   var hh=document.getElementById('health'), hu=document.getElementById('hunger'), ha=document.getElementById('armor');
   var s=''; for(var i=0;i<10;i++) s+= (health>i*2)?'♥':'♡';
   hh.textContent=s;
-  var t=''; for(var j=0;j<10;j++) t+=(hunger>j*2)?'●':'○';
+  // Hunger bar with food icons
+  var t='';
+  for(var j=0;j<10;j++){
+    if(hunger>j*2+1) t+='🍖'; // Full food icon
+    else if(hunger>j*2) t+='🍗'; // Half food icon
+    else t+='○'; // Empty
+  }
   hu.textContent=t;
   var ap=getArmorProtection();
   var armorHP=Math.round(ap/2);
@@ -2586,6 +2694,15 @@ function updateBars(){
   ha.textContent=ap>0?a:'';
   ha.style.color='#BBBBBB';
   hh.style.opacity=(health<=6)?(0.6+0.4*Math.sin(performance.now()/150)) : 1;
+  // Eating progress bar
+  var eatBar=document.getElementById('eat-bar');
+  var eatFill=document.getElementById('eat-fill');
+  if(eating && eatProgress>0 && eatTarget>0){
+    eatBar.style.display='block';
+    eatFill.style.width=Math.round((eatProgress/eatTarget)*100)+'%';
+  } else {
+    eatBar.style.display='none';
+  }
 }
 
 // ---------- Day/night ----------
@@ -2686,6 +2803,26 @@ function loop(){
           }
         }
       } else { miningTarget=null; miningProgress=0; mineTickTimer=0; }
+      // Eating update
+      if(eating && eatFoodId!==AIR){
+        var held=inv[selIndex];
+        if(held.id!==eatFoodId || hunger>=20){
+          eating=false; eatProgress=0; eatFoodId=AIR;
+          updateBars();
+        } else {
+          eatProgress+=dt;
+          updateBars();
+          if(eatProgress>=eatTarget){
+            // Consume food
+            hunger=Math.min(20,hunger+FOODS[eatFoodId].nutrition);
+            invRemove(selIndex,1);
+            sfxEat();
+            showMsg('Ate '+FOODS[eatFoodId].name+' (+'+FOODS[eatFoodId].nutrition+' hunger)');
+            eating=false; eatProgress=0; eatFoodId=AIR;
+            buildHotbar(); updateHand(); updateBars();
+          }
+        }
+      }
       updateSky(dt);
       updateMobs(dt);
       trySpawn(dt);
