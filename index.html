@@ -152,7 +152,7 @@
 <div id="inventory" class="screen hidden">
   <div class="title" style="font-size:36px;">INVENTORY</div>
   <div class="panel">
-    <div id="inv-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;justify-items:center;margin:4px 0;"></div>
+    <div id="inv-grid" style="display:grid;grid-template-columns:repeat(9,1fr);gap:4px;justify-items:center;margin:4px 0;max-width:540px;"></div>
     <div id="inv-stats" style="margin-top:12px;font-size:13px;color:#cfc;font-family:monospace;"></div>
     <div style="margin-top:6px;font-size:12px;color:#888;">Click a block (or press 1-9) to select it</div>
     <button class="btn" id="inv-close">&#1004; Done (E)</button>
@@ -190,6 +190,48 @@ HARDNESS[COAL]=2.0; HARDNESS[IRON]=2.5; HARDNESS[GOLD]=3.0; HARDNESS[DIAM]=3.5;
 HARDNESS[NETHERRACK]=1.0; HARDNESS[GLOWSTONE]=0.5;
 HARDNESS[LAVA]=0.0;
 HARDNESS[OBSIDIAN]=-1; HARDNESS[NPORTAL]=-1;
+// Block drop table: block id -> [{id, n}] (n = count, or {min, max} for range)
+var DROPS={};
+DROPS[GRASS]=[{id:DIRT,n:1}]; DROPS[DIRT]=[{id:DIRT,n:1}]; DROPS[STONE]=[{id:STONE,n:1}];
+DROPS[LOG]=[{id:LOG,n:1}]; DROPS[LEAF]=[]; DROPS[SAND]=[{id:SAND,n:1}];
+DROPS[PLANK]=[{id:PLANK,n:1}]; DROPS[GLASS]=[]; DROPS[BRICK]=[{id:BRICK,n:1}];
+DROPS[COAL]=[{id:COAL,n:1}]; DROPS[IRON]=[{id:IRON,n:1}]; DROPS[GOLD]=[{id:GOLD,n:1}];
+DROPS[DIAM]=[{id:DIAM,n:1}]; DROPS[SNOWG]=[{id:DIRT,n:1}]; DROPS[CACTUS]=[{id:CACTUS,n:1}];
+DROPS[NETHERRACK]=[{id:NETHERRACK,n:1}]; DROPS[SOULSAND]=[{id:SOULSAND,n:1}];
+DROPS[GLOWSTONE]=[{id:GLOWSTONE,min:1,max:4}]; DROPS[LAVA]=[];
+// Inventory: 36 slots (0-8 = hotbar, 9-35 = main inventory)
+var inv=[];
+for(var ii=0;ii<36;ii++) inv.push({id:AIR,n:0});
+var SLOT_MAX=64;
+function invCount(slotId){ return inv[slotId]?inv[slotId].n:0; }
+function invAdd(id,n){
+  if(id===AIR||n<=0) return 0;
+  // try stacking into existing slots first (hotbar first 0-8, then 9-35)
+  var left=n;
+  for(var i=0;i<36&&left>0;i++){
+    if(inv[i].id===id && inv[i].n<SLOT_MAX){
+      var take=Math.min(left, SLOT_MAX-inv[i].n);
+      inv[i].n+=take; left-=take;
+    }
+  }
+  // then fill empty slots
+  for(var i=0;i<36&&left>0;i++){
+    if(inv[i].n===0){
+      var take=Math.min(left, SLOT_MAX);
+      inv[i].id=id; inv[i].n=take; left-=take;
+    }
+  }
+  return n-left; // how many were actually added
+}
+function invRemove(slotId,n){
+  if(!inv[slotId]) return false;
+  inv[slotId].n-=n;
+  if(inv[slotId].n<=0){ inv[slotId].id=AIR; inv[slotId].n=0; }
+  return true;
+}
+// Initialize hotbar with starting blocks (64 each)
+var START_ITEMS=[GRASS,DIRT,STONE,LOG,LEAF,SAND,PLANK,GLASS,BRICK];
+for(var si=0;si<9;si++){ inv[si].id=START_ITEMS[si]; inv[si].n=64; }
 var BLOCKS = {
   1:{name:'Grass', top:0, side:1, bottom:2},
   2:{name:'Dirt', top:2, side:2, bottom:2},
@@ -214,7 +256,6 @@ var BLOCKS = {
   21:{name:'Glowstone', top:26, side:26, bottom:26},
   22:{name:'Lava', top:27, side:27, bottom:27}
 };
-var HOTBAR = [GRASS,DIRT,STONE,LOG,LEAF,SAND,PLANK,GLASS,BRICK];
 var selIndex = 0;
 
 // Dimension state
@@ -1038,11 +1079,30 @@ function doPlace(){
   var cur=getBlock(px,py,pz);
   if(cur!==AIR&&cur!==WATER) return;
   if(py<0||py>=H) return;
-  var id=HOTBAR[selIndex];
+  var id=inv[selIndex].id;
+  if(id===AIR||inv[selIndex].n<=0) return;
   var minX=px,maxX=px+1,minY=py,maxY=py+1,minZ=pz,maxZ=pz+1;
   var pMinX=player.x-PW,pMaxX=player.x+PW,pMinY=player.y,pMaxY=player.y+PH,pMinZ=player.z-PW,pMaxZ=player.z+PW;
   if(isSolid(id) && pMaxX>minX&&pMinX<maxX&&pMaxY>minY&&pMinY<maxY&&pMaxZ>minZ&&pMinZ<maxZ) return;
-  if(setBlock(px,py,pz,id)){ sfxPlace(); swingHand(); }
+  if(setBlock(px,py,pz,id)){ sfxPlace(); swingHand(); invRemove(selIndex,1); }
+}
+
+// ---------- Block drops ----------
+function spawnBlockDrops(x, y, z, blockId){
+  var drops=DROPS[blockId];
+  if(!drops) return;
+  for(var di=0;di<drops.length;di++){
+    var d=drops[di];
+    var count=d.n||(d.min+Math.floor(Math.random()*(d.max-d.min+1)));
+    for(var ci=0;ci<count;ci++){
+      var ox=(Math.random()-0.5)*0.5, oz=(Math.random()-0.5)*0.5;
+      pickups.push({x:x+0.5+ox, y:y+0.7, z:z+0.5+oz,
+        vx:(Math.random()-0.5)*3, vy:3+Math.random()*2, vz:(Math.random()-0.5)*3,
+        kind:BLOCKS[d.id]?BLOCKS[d.id].name:'Block', nut:0, t:0,
+        col:BLOCK_RGB[d.id]||[0.8,0.8,0.8], blockId:d.id, blockCount:1});
+      if(pickups.length>60) pickups.shift();
+    }
+  }
 }
 
 // ---------- MOBS ----------
@@ -1226,9 +1286,21 @@ function updateMobs(dt){
     var pd2=pdx*pdx+pdy*pdy+pdz*pdz;
     if(pd2<2.2*2.2 && it.t>0.6){ it.vx+=pdx*8*dt; it.vz+=pdz*8*dt; it.vy+=pdy*6*dt; }
     if(pd2<1.1*1.1 && it.t>0.6){
-      hunger=Math.min(20,hunger+it.nut); updateBars(); sfxPop();
-      showMsg('Picked up '+it.kind+(it.nut?' (+'+it.nut+' hunger)':''));
-      pickups.splice(p,1);
+      sfxPop();
+      if(it.blockId && it.blockId!==AIR){
+        var added=invAdd(it.blockId, it.blockCount||1);
+        if(added>0){
+          showMsg('Picked up '+it.kind+(added>1?' x'+added:''));
+          buildHotbar(); updateHand();
+          pickups.splice(p,1);
+        } else {
+          showMsg('Inventory full!');
+        }
+      } else {
+        hunger=Math.min(20,hunger+it.nut); updateBars();
+        showMsg('Picked up '+it.kind+(it.nut?' (+'+it.nut+' hunger)':''));
+        pickups.splice(p,1);
+      }
     }
   }
 }
@@ -1303,9 +1375,10 @@ function renderMobsEtc(){
     pushBox(arr,m.x+lx+ex,hy+headS*0.55,m.z+lz+ez, headS*0.7,headS*0.18,0.03, m.yaw, 0.05,0.05,0.05);
   }
   for(var p=0;p<pickups.length;p++){
-    var it=pickups[p], di=DROP_INFO[it.kind]||{c:it.col||[1,1,1]};
+    var it=pickups[p], di=DROP_INFO[it.kind];
+    var col=di?di.c:(it.col||[1,1,1]);
     var bob=Math.sin(t*4+p)*0.08;
-    pushBox(arr,it.x,it.y+0.1+bob,it.z, 0.28,0.28,0.28, t*3+p, di.c[0],di.c[1],di.c[2]);
+    pushBox(arr,it.x,it.y+0.1+bob,it.z, 0.28,0.28,0.28, t*3+p, col[0],col[1],col[2]);
   }
   if(!arr.length) return;
   gl.useProgram(progM);
@@ -1617,7 +1690,7 @@ document.addEventListener('pointerlockchange', function(){
   }
 });
 // ---------- Inventory (E) & dropping (Q) ----------
-var BLOCK_RGB={1:[0.42,0.75,0.19],2:[0.54,0.37,0.24],3:[0.55,0.55,0.55],4:[0.42,0.29,0.16],5:[0.25,0.49,0.17],6:[0.89,0.84,0.61],7:[0.65,0.49,0.23],8:[0.81,0.91,0.96],9:[0.64,0.29,0.23],10:[0.2,0.47,0.86],11:[0.3,0.3,0.3],12:[0.85,0.63,0.48],13:[0.96,0.84,0.26],14:[0.43,0.95,0.95],15:[0.95,0.97,0.97],16:[0.25,0.57,0.25]};
+var BLOCK_RGB={1:[0.42,0.75,0.19],2:[0.54,0.37,0.24],3:[0.55,0.55,0.55],4:[0.42,0.29,0.16],5:[0.25,0.49,0.17],6:[0.89,0.84,0.61],7:[0.65,0.49,0.23],8:[0.81,0.91,0.96],9:[0.64,0.29,0.23],10:[0.2,0.47,0.86],11:[0.3,0.3,0.3],12:[0.85,0.63,0.48],13:[0.96,0.84,0.26],14:[0.43,0.95,0.95],15:[0.95,0.97,0.97],16:[0.25,0.57,0.25],17:[0.55,0.1,0.06],18:[0.5,0.2,0.8],19:[0.1,0.05,0.18],20:[0.42,0.3,0.15],21:[1.0,0.75,0.1],22:[1.0,0.5,0.0]};
 function openInventory(){
   if(invOpen||!playing) return;
   invOpen=true;
@@ -1641,15 +1714,16 @@ function closeInventory(relock){
 function buildInvGrid(){
   var grid=document.getElementById('inv-grid');
   grid.innerHTML='';
-  for(var i=0;i<9;i++){
+  for(var i=0;i<36;i++){
     (function(i){
       var d=document.createElement('div'); d.className='slot'+(i===selIndex?' sel':'');
       d.style.cursor='pointer'; d.style.pointerEvents='auto';
+      if(inv[i].n<=0) d.style.opacity='0.3';
       var cv=document.createElement('canvas'); cv.width=32; cv.height=32;
-      drawBlockIcon(cv, HOTBAR[i]);
-      var n=document.createElement('div'); n.className='n'; n.textContent=BLOCKS[HOTBAR[i]].name;
+      drawBlockIcon(cv, inv[i].id);
+      var n=document.createElement('div'); n.className='n'; n.textContent=inv[i].n>0?(BLOCKS[inv[i].id].name+(inv[i].n>1?' x'+inv[i].n:'')):'';
       d.appendChild(cv); d.appendChild(n);
-      d.addEventListener('click', function(){ selectSlot(i); buildInvGrid(); });
+      d.addEventListener('click', function(){ if(inv[i].n>0) selectSlot(i%9); buildInvGrid(); });
       grid.appendChild(d);
     })(i);
   }
@@ -1657,14 +1731,17 @@ function buildInvGrid(){
 }
 function dropSelected(){
   if(dead||!playing) return;
-  var id=HOTBAR[selIndex], name=BLOCKS[id].name;
+  var id=inv[selIndex].id, name=BLOCKS[id].name;
+  if(id===AIR||inv[selIndex].n<=0) return;
   var dir=lookDir(), o=eyePos();
   pickups.push({x:o[0]+dir[0]*1.2, y:o[1]+dir[1]*0.9, z:o[2]+dir[2]*1.2,
     vx:dir[0]*4, vy:3, vz:dir[2]*4, kind:name, nut:0, t:0,
-    col:BLOCK_RGB[id]||[0.8,0.8,0.8]});
-  if(pickups.length>30) pickups.shift();
+    col:BLOCK_RGB[id]||[0.8,0.8,0.8], blockId:id});
+  if(pickups.length>60) pickups.shift();
+  invRemove(selIndex,1);
   tone(300,0.08,'square',0.15,200);
   showMsg('Dropped '+name);
+  buildHotbar(); updateHand();
 }
 document.getElementById('play-btn').addEventListener('click', function(){
   audioInit();
@@ -1874,12 +1951,12 @@ function pickBlock(){
   var hit=raycast(eyePos(), lookDir(), REACH);
   if(!hit){ showNavToast('Nothing to pick'); return; }
   var bid=hit.id;
-  // find if already in hotbar
-  for(var i=0;i<9;i++){
-    if(HOTBAR[i]===bid){ selectSlot(i); showNavToast('Picked '+BLOCKS[bid].name+' [slot '+(i+1)+']'); return; }
+  // find if already in inventory
+  for(var i=0;i<36;i++){
+    if(inv[i].id===bid && inv[i].n>0){ selectSlot(i%9); showNavToast('Picked '+BLOCKS[bid].name+' [slot '+(i%9+1)+']'); return; }
   }
-  // replace current slot
-  HOTBAR[selIndex]=bid;
+  // add to current slot
+  invAdd(bid, 1);
   buildHotbar(); updateHand();
   showNavToast('Picked '+BLOCKS[bid].name+' into slot '+(selIndex+1));
 }
@@ -1902,9 +1979,9 @@ function buildHotbar(){
     (function(i){
       var d=document.createElement('div'); d.className='slot'+(i===selIndex?' sel':'');
       var cv=document.createElement('canvas'); cv.width=32; cv.height=32;
-      drawBlockIcon(cv, HOTBAR[i]);
+      drawBlockIcon(cv, inv[i].id);
       var k=document.createElement('div'); k.className='k'; k.textContent=(i+1);
-      var n=document.createElement('div'); n.className='n'; n.textContent=BLOCKS[HOTBAR[i]].name;
+      var n=document.createElement('div'); n.className='n'; n.textContent=inv[i].n>0?(BLOCKS[inv[i].id].name+(inv[i].n>1?' x'+inv[i].n:'')):'Empty';
       d.appendChild(cv); d.appendChild(k); d.appendChild(n);
       hotbarEl.appendChild(d); slotCanvases.push(d);
     })(i);
@@ -1917,11 +1994,11 @@ function selectSlot(i){
   updateSelectedLabel(); updateHand();
   if(invOpen) buildInvGrid();
 }
-function updateSelectedLabel(){ document.getElementById('selected-label').textContent=BLOCKS[HOTBAR[selIndex]].name+' ['+(selIndex+1)+']'; }
+function updateSelectedLabel(){ document.getElementById('selected-label').textContent=BLOCKS[inv[selIndex].id].name+' ['+(selIndex+1)+']'+(inv[selIndex].n>1?' x'+inv[selIndex].n:''); }
 function updateHand(){
   var hb=document.getElementById('hand-block');
   var g=hb.getContext('2d'); g.imageSmoothingEnabled=false;
-  var b=BLOCKS[HOTBAR[selIndex]];
+  var b=BLOCKS[inv[selIndex].id];
   g.clearRect(0,0,16,16);
   g.drawImage(atlasCanvas, b.side*16,0,16,16, 0,0,16,16);
 }
@@ -2011,12 +2088,14 @@ function loop(){
               mineTickTimer+=dt;
               if(mineTickTimer>0.3){ mineTickTimer=0; sfxMine(); }
               if(miningProgress>=miningHardness){
+                spawnBlockDrops(hit.x,hit.y,hit.z,hit.id);
                 setBlock(hit.x,hit.y,hit.z,AIR);
                 sfxBreak(); swingHand();
-                if(ORE_NAMES[hit.id]){ showMsg(ORE_NAMES[hit.id]+' ore mined!'); hunger=Math.min(20,hunger+0.5); updateBars(); }
+                if(ORE_NAMES[hit.id]){ showMsg(ORE_NAMES[hit.id]+' ore mined!'); }
                 miningTarget=null; miningProgress=0;
               }
             } else if(miningHardness===0){
+              spawnBlockDrops(hit.x,hit.y,hit.z,hit.id);
               setBlock(hit.x,hit.y,hit.z,AIR);
               sfxBreak(); swingHand();
               miningTarget=null; miningProgress=0;
