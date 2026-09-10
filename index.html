@@ -103,6 +103,10 @@
   .inv-cursor-count { position:absolute; bottom:0; right:2px; font-size:10px; color:#fff; font-family:monospace; text-shadow:1px 1px 0 #000; font-weight:bold; }
   .inv-grid-main { display:grid; grid-template-columns:repeat(9,1fr); gap:3px; justify-items:center; }
   .inv-grid-craft { display:grid; grid-template-columns:repeat(2,1fr); gap:4px; justify-items:center; }
+  .inv-grid-armor { display:grid; grid-template-columns:repeat(2,1fr); gap:4px; justify-items:center; }
+  .inv-slot.armor-slot { border-color:#6a5a2e; background:rgba(50,40,20,.9); }
+  .inv-slot.armor-slot:hover { border-color:#a98a3e; }
+  #inv-armor-area { margin-right:8px; }
   #inv-craft-area { display:flex; align-items:center; gap:4px; }
   #inv-hotbar-row { display:flex; gap:3px; justify-content:center; padding-top:6px; border-top:2px solid #444; margin-top:6px; }
   #inv-player-model { width:80px; height:120px; background:rgba(0,0,0,.3); border-radius:8px; display:flex; align-items:center; justify-content:center; }
@@ -183,6 +187,10 @@
   <div class="title" style="font-size:32px;">INVENTORY</div>
   <div class="panel" style="max-width:620px;">
     <div style="display:flex;gap:16px;align-items:flex-start;">
+      <div id="inv-armor-area">
+        <div class="inv-section">Armor</div>
+        <div id="inv-armor-grid" class="inv-grid-armor"></div>
+      </div>
       <div id="inv-craft-area">
         <div>
           <div class="inv-section">Crafting</div>
@@ -286,6 +294,21 @@ var ITEMS = {
   'Stone Shovel':    {name:'Stone Shovel',    color:[0.55,0.55,0.55],maxStack:1, tool:'shovel', tier:2, food:0},
   'Iron Shovel':     {name:'Iron Shovel',     color:[0.85,0.85,0.85],maxStack:1, tool:'shovel', tier:3, food:0},
   'Diamond Shovel':  {name:'Diamond Shovel',  color:[0.43,0.95,0.95],maxStack:1, tool:'shovel', tier:4, food:0},
+  // Armor - Iron
+  'Iron Helmet':      {name:'Iron Helmet',      color:[0.85,0.85,0.85],maxStack:1, armor:2, armorType:'helmet', food:0},
+  'Iron Chestplate':  {name:'Iron Chestplate',  color:[0.85,0.85,0.85],maxStack:1, armor:6, armorType:'chestplate', food:0},
+  'Iron Leggings':    {name:'Iron Leggings',    color:[0.85,0.85,0.85],maxStack:1, armor:5, armorType:'leggings', food:0},
+  'Iron Boots':       {name:'Iron Boots',       color:[0.85,0.85,0.85],maxStack:1, armor:2, armorType:'boots', food:0},
+  // Armor - Gold
+  'Gold Helmet':      {name:'Gold Helmet',      color:[0.96,0.84,0.26],maxStack:1, armor:2, armorType:'helmet', food:0},
+  'Gold Chestplate':  {name:'Gold Chestplate',  color:[0.96,0.84,0.26],maxStack:1, armor:5, armorType:'chestplate', food:0},
+  'Gold Leggings':    {name:'Gold Leggings',    color:[0.96,0.84,0.26],maxStack:1, armor:3, armorType:'leggings', food:0},
+  'Gold Boots':       {name:'Gold Boots',       color:[0.96,0.84,0.26],maxStack:1, armor:1, armorType:'boots', food:0},
+  // Armor - Diamond
+  'Diamond Helmet':      {name:'Diamond Helmet',      color:[0.43,0.95,0.95],maxStack:1, armor:3, armorType:'helmet', food:0},
+  'Diamond Chestplate':  {name:'Diamond Chestplate',  color:[0.43,0.95,0.95],maxStack:1, armor:8, armorType:'chestplate', food:0},
+  'Diamond Leggings':    {name:'Diamond Leggings',    color:[0.43,0.95,0.95],maxStack:1, armor:6, armorType:'leggings', food:0},
+  'Diamond Boots':       {name:'Diamond Boots',       color:[0.43,0.95,0.95],maxStack:1, armor:3, armorType:'boots', food:0},
 };
 
 // ---------- Inventory System ----------
@@ -294,6 +317,7 @@ var inv = {
   craft: [],       // 2x2 crafting grid + 1 result (5 total, index 0-3=input, 4=result)
   cursor: null,    // {type, id, count} - item being dragged
   dirty: false,
+  armor: { helmet: null, chestplate: null, leggings: null, boots: null },
 };
 
 function makeSlot(type, id, count) {
@@ -306,6 +330,7 @@ function initInventory() {
   inv.craft = [null,null,null,null,null];
   inv.cursor = null;
   inv.dirty = false;
+  inv.armor = { helmet: null, chestplate: null, leggings: null, boots: null };
   // Load hotbar from default
   for (var i = 0; i < 9; i++) {
     inv.slots[i] = makeSlot('block', HOTBAR[i], 1);
@@ -339,6 +364,32 @@ function invSlotFood(slot) {
   if (!slot || slot.type !== 'item') return 0;
   var it = ITEMS[slot.id];
   return it ? it.food : 0;
+}
+
+function invSlotArmor(slot) {
+  if (!slot || slot.type !== 'item') return 0;
+  var it = ITEMS[slot.id];
+  return it ? (it.armor || 0) : 0;
+}
+
+function invSlotArmorType(slot) {
+  if (!slot || slot.type !== 'item') return null;
+  var it = ITEMS[slot.id];
+  return it ? (it.armorType || null) : null;
+}
+
+function getArmorPoints() {
+  var total = 0;
+  if (inv.armor.helmet) total += invSlotArmor(inv.armor.helmet);
+  if (inv.armor.chestplate) total += invSlotArmor(inv.armor.chestplate);
+  if (inv.armor.leggings) total += invSlotArmor(inv.armor.leggings);
+  if (inv.armor.boots) total += invSlotArmor(inv.armor.boots);
+  return total;
+}
+
+function getArmorReduction() {
+  var points = getArmorPoints();
+  return Math.min(points * 0.04, 0.8); // max 80% reduction
 }
 
 function slotsMatch(a, b) {
@@ -464,12 +515,60 @@ function checkCrafting() {
   if(isEmpty(0) && isItem(1,'Diamond') && isEmpty(2) && isItem(3,'Stick')){
     inv.craft[4] = makeSlot('item', 'Diamond Shovel', 1); return;
   }
+  // Iron Helmet: [Iron][Iron] / [Iron][ ]
+  if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Iron Ingot') && isEmpty(3)){
+    inv.craft[4] = makeSlot('item', 'Iron Helmet', 1); return;
+  }
+  // Iron Chestplate: [Iron][ ] / [Iron][Iron]
+  if(isItem(0,'Iron Ingot') && isEmpty(1) && isItem(2,'Iron Ingot') && isItem(3,'Iron Ingot')){
+    inv.craft[4] = makeSlot('item', 'Iron Chestplate', 1); return;
+  }
+  // Iron Leggings: [Iron][Iron] / [ ][Iron]
+  if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isEmpty(2) && isItem(3,'Iron Ingot')){
+    inv.craft[4] = makeSlot('item', 'Iron Leggings', 1); return;
+  }
+  // Iron Boots: [ ][ ] / [Iron][Iron]
+  if(isEmpty(0) && isEmpty(1) && isItem(2,'Iron Ingot') && isItem(3,'Iron Ingot')){
+    inv.craft[4] = makeSlot('item', 'Iron Boots', 1); return;
+  }
+  // Gold Helmet: [Gold][Gold] / [Gold][ ]
+  if(isItem(0,'Gold Nugget') && isItem(1,'Gold Nugget') && isItem(2,'Gold Nugget') && isEmpty(3)){
+    inv.craft[4] = makeSlot('item', 'Gold Helmet', 1); return;
+  }
+  // Gold Chestplate: [Gold][ ] / [Gold][Gold]
+  if(isItem(0,'Gold Nugget') && isEmpty(1) && isItem(2,'Gold Nugget') && isItem(3,'Gold Nugget')){
+    inv.craft[4] = makeSlot('item', 'Gold Chestplate', 1); return;
+  }
+  // Gold Leggings: [Gold][Gold] / [ ][Gold]
+  if(isItem(0,'Gold Nugget') && isItem(1,'Gold Nugget') && isEmpty(2) && isItem(3,'Gold Nugget')){
+    inv.craft[4] = makeSlot('item', 'Gold Leggings', 1); return;
+  }
+  // Gold Boots: [ ][ ] / [Gold][Gold]
+  if(isEmpty(0) && isEmpty(1) && isItem(2,'Gold Nugget') && isItem(3,'Gold Nugget')){
+    inv.craft[4] = makeSlot('item', 'Gold Boots', 1); return;
+  }
+  // Diamond Helmet: [Diamond][Diamond] / [Diamond][ ]
+  if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Diamond') && isEmpty(3)){
+    inv.craft[4] = makeSlot('item', 'Diamond Helmet', 1); return;
+  }
+  // Diamond Chestplate: [Diamond][ ] / [Diamond][Diamond]
+  if(isItem(0,'Diamond') && isEmpty(1) && isItem(2,'Diamond') && isItem(3,'Diamond')){
+    inv.craft[4] = makeSlot('item', 'Diamond Chestplate', 1); return;
+  }
+  // Diamond Leggings: [Diamond][Diamond] / [ ][Diamond]
+  if(isItem(0,'Diamond') && isItem(1,'Diamond') && isEmpty(2) && isItem(3,'Diamond')){
+    inv.craft[4] = makeSlot('item', 'Diamond Leggings', 1); return;
+  }
+  // Diamond Boots: [ ][ ] / [Diamond][Diamond]
+  if(isEmpty(0) && isEmpty(1) && isItem(2,'Diamond') && isItem(3,'Diamond')){
+    inv.craft[4] = makeSlot('item', 'Diamond Boots', 1); return;
+  }
 }
 
 // ---------- Inventory persistence ----------
 function saveInv() {
   try {
-    var data = { slots: inv.slots.slice(), craft: [inv.craft[0],inv.craft[1],inv.craft[2],inv.craft[3]] };
+    var data = { slots: inv.slots.slice(), craft: [inv.craft[0],inv.craft[1],inv.craft[2],inv.craft[3]], armor: inv.armor };
     localStorage.setItem('vc_inv', JSON.stringify(data));
   } catch(e) {}
 }
@@ -487,6 +586,18 @@ function loadInv() {
       inv.slots = d.slots;
       if (d.craft) { inv.craft[0]=d.craft[0]||null; inv.craft[1]=d.craft[1]||null; inv.craft[2]=d.craft[2]||null; inv.craft[3]=d.craft[3]||null; }
       inv.craft[4] = null;
+      // Load armor
+      if (d.armor) {
+        var armorTypes = ['helmet', 'chestplate', 'leggings', 'boots'];
+        for (var i = 0; i < armorTypes.length; i++) {
+          var type = armorTypes[i];
+          if (d.armor[type] && d.armor[type].type === 'item' && ITEMS[d.armor[type].id]) {
+            inv.armor[type] = d.armor[type];
+          } else {
+            inv.armor[type] = null;
+          }
+        }
+      }
       syncInvToHotbar();
       return true;
     }
@@ -495,7 +606,7 @@ function loadInv() {
 }
 
 // ---------- Inventory UI ----------
-var invEl, invMainEl, invHotbarEl, invCraftEl, invCraftResultEl, invStatsEl, invTooltipEl, invCursorEl;
+var invEl, invMainEl, invHotbarEl, invCraftEl, invCraftResultEl, invStatsEl, invTooltipEl, invCursorEl, invArmorEl;
 
 function initInvUI() {
   invEl = document.getElementById('inventory');
@@ -506,6 +617,7 @@ function initInvUI() {
   invStatsEl = document.getElementById('inv-stats');
   invTooltipEl = document.getElementById('inv-tooltip');
   invCursorEl = document.getElementById('inv-cursor-item');
+  invArmorEl = document.getElementById('inv-armor-grid');
 }
 
 function drawInvSlotIcon(slot) {
@@ -592,13 +704,37 @@ function buildInvGrid() {
     invCraftEl.appendChild(buildInvSlot(inv.craft[i], i, 'craft-slot', craftSlotClick, craftSlotRightClick));
   }
 
+  // Armor slots
+  invArmorEl.innerHTML = '';
+  var armorTypes = ['helmet', 'chestplate', 'leggings', 'boots'];
+  for (var i = 0; i < armorTypes.length; i++) {
+    var type = armorTypes[i];
+    var slot = inv.armor[type];
+    var d = buildInvSlot(slot, 'armor-' + type, 'armor-slot', armorSlotClick, armorSlotRightClick);
+    // Add type label
+    var label = document.createElement('div');
+    label.className = 'inv-name';
+    label.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+    label.style.position = 'absolute';
+    label.style.bottom = '1px';
+    label.style.left = '2px';
+    label.style.fontSize = '7px';
+    label.style.color = '#888';
+    label.style.pointerEvents = 'none';
+    d.appendChild(label);
+    invArmorEl.appendChild(d);
+  }
+
   // Stats
   var killCount = typeof kills !== 'undefined' ? kills : 0;
   var hp = typeof health !== 'undefined' ? Math.max(0, Math.round(health)) : 20;
   var hng = typeof hunger !== 'undefined' ? Math.max(0, Math.round(hunger)) : 20;
+  var armorPts = getArmorPoints();
+  var armorRed = Math.round(getArmorReduction() * 100);
   invStatsEl.innerHTML = '<div>Kills: ' + killCount + '</div>' +
     '<div>Health: ' + hp + '/20</div>' +
     '<div>Hunger: ' + hng + '/20</div>' +
+    '<div>Armor: ' + armorPts + ' (+' + armorRed + '% reduction)</div>' +
     '<div style="margin-top:6px;color:#888;">Slots: ' + invCountUsed() + '/45</div>';
 
   checkCrafting();
@@ -768,6 +904,48 @@ function craftSlotClick(idx, btn, e) {
 }
 function craftSlotRightClick(idx, btn, e) { craftSlotClick(idx, 'right', e); }
 
+// ---------- Armor slot interactions ----------
+function armorSlotClick(idx, btn, e) {
+  var type = idx.replace('armor-', '');
+  if (btn === 'left') {
+    if (inv.cursor) {
+      // Try to equip the cursor item
+      var cursorArmorType = invSlotArmorType(inv.cursor);
+      if (cursorArmorType === type) {
+        // Equip: swap with current armor
+        var existing = inv.armor[type];
+        inv.armor[type] = makeSlot(inv.cursor.type, inv.cursor.id, 1);
+        inv.cursor.count--;
+        if (inv.cursor.count <= 0) inv.cursor = null;
+        if (existing) {
+          if (inv.cursor) {
+            // Can't stack armor, add to inventory
+            invAdd(existing.type, existing.id, 1);
+          } else {
+            inv.cursor = existing;
+          }
+        }
+        inv.dirty = true;
+      }
+    } else if (inv.armor[type]) {
+      // Pick up armor
+      inv.cursor = inv.armor[type];
+      inv.armor[type] = null;
+      inv.dirty = true;
+    }
+  } else if (btn === 'right') {
+    if (!inv.cursor && inv.armor[type]) {
+      // Pick up single (armor doesn't stack, so same as left)
+      inv.cursor = inv.armor[type];
+      inv.armor[type] = null;
+      inv.dirty = true;
+    }
+  }
+  buildInvGrid();
+  updateCursor();
+}
+function armorSlotRightClick(idx, btn, e) { armorSlotClick(idx, 'right', e); }
+
 function craftResultClick(idx, btn, e) {
   if (btn !== 'left') return;
   if (!inv.craft[4]) return;
@@ -800,6 +978,7 @@ function showInvTooltip(slot, e) {
     var it = ITEMS[slot.id];
     if (it && it.food > 0) info = 'Food: +' + it.food;
     if (it && it.tool) info = (info ? info + ' \u2022 ' : '') + 'Tool: ' + it.tool + ' (tier ' + it.tier + ')';
+    if (it && it.armor) info = (info ? info + ' \u2022 ' : '') + 'Armor: +' + it.armor + ' (' + it.armorType + ')';
   }
   if (slot.type === 'block') {
     var bl = BLOCKS[slot.id];
@@ -1639,6 +1818,9 @@ function movePlayer(dt){
 function damage(n){
   if(dead) return;
   if(hurtTimer>0&&n<900) return;
+  // Apply armor reduction
+  var reduction = getArmorReduction();
+  n = Math.max(1, Math.round(n * (1 - reduction)));
   health-=n; hurtTimer=0.6; flash(); sfxHurt();
   updateBars();
   if(health<=0){ health=0; dead=true; updateBars(); showMsg('You died! Respawning...'); setTimeout(respawn,1500); }
