@@ -6,14 +6,16 @@ on:
 
 jobs:
   opencode:
-    if: contains(github.event.comment.body, '/oc')
+    if: |
+      contains(github.event.comment.body, '/oc') ||
+      contains(github.event.comment.body, '/opencode')
+
     runs-on: ubuntu-latest
 
     permissions:
       contents: write
-      issues: write
       pull-requests: write
-      id-token: write
+      issues: write
 
     steps:
       - name: Checkout repository
@@ -26,7 +28,6 @@ jobs:
         uses: anomalyco/opencode/github@latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
-          model: anthropic/claude-sonnet-4-20250514
+          model: opencode/mimo-v2.5-free
           use_github_token: true
