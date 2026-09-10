@@ -2097,6 +2097,9 @@ function updateWeather(dt){
   label.textContent=icon+(isDay?'☀ Day ':'🌙 Night ')+dayNum+' '+String(hh2).padStart(2,'0')+':'+String(mm).padStart(2,'0');
 }
 function renderWeather(){
+  if(lightningFlash<=0&&lightningFlashEl&&lightningFlashEl.style.opacity!=="0"){
+    lightningFlashEl.style.opacity=0;
+  }
   if(weather.type==='clear') return;
   var arr=[];
   var rain=weather.type==='rain'||weather.type==='storm';
@@ -2126,11 +2129,9 @@ function renderWeather(){
   if(rain){ gl.uniform4f(uColF,0.6,0.72,1.0,storm?0.7:0.55); gl.drawArrays(gl.LINES,0,arr.length/3); }
   else { gl.uniform4f(uColF,1,1,1,0.9); gl.drawArrays(gl.LINES,0,arr.length/3); }
   if(lightningFlash>0){
-    var lf=document.getElementById('lightning-flash');
-    if(lf){lf.style.opacity=lightningFlash*0.85;}
+    if(lightningFlashEl){lightningFlashEl.style.opacity=lightningFlash*0.85;}
   } else {
-    var lf=document.getElementById('lightning-flash');
-    if(lf){lf.style.opacity=0;}
+    if(lightningFlashEl){lightningFlashEl.style.opacity=0;}
   }
 }
 
@@ -2139,6 +2140,7 @@ var clouds=[];
 for(var ci=0;ci<16;ci++) clouds.push({ox:Math.random()*160-80, oz:Math.random()*160-80, w:6+Math.random()*10, d:5+Math.random()*8, s:0.6+Math.random()*0.8});
 var cloudVBO=gl.createBuffer();
 var selVBO=gl.createBuffer();
+var lightningFlashEl=document.getElementById("lightning-flash");
 
 // ---------- Resize ----------
 function resize(){
