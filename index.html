@@ -339,15 +339,14 @@ function slotsMatch(a, b) {
 }
 
 // Find a matching stack or empty slot
-function invFindSlot(type, id, skipCraft) {
+function invFindSlot(type, id) {
   // First try to stack
-  var start = skipCraft ? 0 : 0;
-  for (var i = start; i < inv.slots.length; i++) {
+  for (var i = 0; i < inv.slots.length; i++) {
     var s = inv.slots[i];
     if (s && s.type === type && s.id === id && s.count < invSlotMaxStack(s)) return i;
   }
   // Then empty
-  for (var i = start; i < inv.slots.length; i++) {
+  for (var i = 0; i < inv.slots.length; i++) {
     if (!inv.slots[i]) return i;
   }
   return -1;
@@ -366,7 +365,6 @@ function invAdd(type, id, count) {
     } else {
       var max = invSlotMaxStack(inv.slots[idx]);
       var space = max - inv.slots[idx].count;
-      if (space <= 0) continue;
       var add = Math.min(remaining, space);
       inv.slots[idx].count += add;
       remaining -= add;
@@ -438,7 +436,6 @@ function syncHotbarToInv() {
 }
 
 // ---------- Crafting ----------
-var CRAFT_TORCH = -1; // special: not a real block
 function checkCrafting() {
   inv.craft[4] = null; // clear result
   var c = inv.craft;
@@ -479,31 +476,6 @@ function checkCrafting() {
   }
 }
 
-function takeCraftResult() {
-  if (!inv.craft[4]) return false;
-  // Consume inputs
-  for (var k = 0; k < 4; k++) {
-    if (inv.craft[k]) {
-      inv.craft[k].count--;
-      if (inv.craft[k].count <= 0) inv.craft[k] = null;
-    }
-  }
-  // Give result to cursor or inventory
-  var result = inv.craft[4];
-  inv.craft[4] = null;
-  if (inv.cursor) {
-    if (slotsMatch(inv.cursor, result)) {
-      inv.cursor.count += result.count;
-    } else {
-      return false; // can't take, cursor full
-    }
-  } else {
-    inv.cursor = makeSlot(result.type, result.id, result.count);
-  }
-  checkCrafting();
-  return true;
-}
-
 // ---------- Inventory persistence ----------
 function saveInv() {
   try {
@@ -515,6 +487,11 @@ function loadInv() {
   try {
     var d = JSON.parse(localStorage.getItem('vc_inv'));
     if (d && d.slots && d.slots.length === 45) {
+      for (var i = 0; i < d.slots.length; i++) {
+        var s = d.slots[i];
+        if (s && (s.type !== 'block' && s.type !== 'item')) { d.slots[i] = null; continue; }
+        if (s && (!s.id && s.id !== 0 || typeof s.count !== 'number' || s.count < 1)) { d.slots[i] = null; }
+      }
       inv.slots = d.slots;
       if (d.craft) { inv.craft[0]=d.craft[0]||null; inv.craft[1]=d.craft[1]||null; inv.craft[2]=d.craft[2]||null; inv.craft[3]=d.craft[3]||null; }
       inv.craft[4] = null;
@@ -623,10 +600,6 @@ function buildInvGrid() {
     invCraftEl.appendChild(buildInvSlot(inv.craft[i], i, 'craft-slot', craftSlotClick, craftSlotRightClick));
   }
 
-  // Crafting result: inv.craft[4]
-  invCraftResultEl.innerHTML = '';
-  invCraftResultEl.appendChild(buildInvSlot(inv.craft[4], 4, 'result-slot', craftResultClick, null));
-
   // Stats
   var killCount = typeof kills !== 'undefined' ? kills : 0;
   var hp = typeof health !== 'undefined' ? Math.max(0, Math.round(health)) : 20;
@@ -637,7 +610,7 @@ function buildInvGrid() {
     '<div style="margin-top:6px;color:#888;">Slots: ' + invCountUsed() + '/45</div>';
 
   checkCrafting();
-  // Re-render result
+  // Render crafting result
   invCraftResultEl.innerHTML = '';
   invCraftResultEl.appendChild(buildInvSlot(inv.craft[4], 4, 'result-slot', craftResultClick, null));
 }
@@ -649,8 +622,6 @@ function invCountUsed() {
 }
 
 // ---------- Inventory slot interactions ----------
-var invDragIdx = -1;
-var invDragType = ''; // 'inv' or 'craft'
 
 function invSlotClick(idx, btn, e) {
   if (btn === 'left') {
@@ -837,9 +808,21 @@ function showInvTooltip(slot, e) {
     var it = ITEMS[slot.id];
     if (it && it.food > 0) info = 'Food: +' + it.food;
   }
-  invTooltipEl.innerHTML = '<div class="tt-name">' + name + '</div>' +
-    '<div class="tt-type">' + typeLabel + ' &bull; ' + slot.count + '/' + invSlotMaxStack(slot) + '</div>' +
-    (info ? '<div class="tt-info">' + info + '</div>' : '');
+  invTooltipEl.innerHTML = '';
+  var nameDiv = document.createElement('div');
+  nameDiv.className = 'tt-name';
+  nameDiv.textContent = name;
+  invTooltipEl.appendChild(nameDiv);
+  var typeDiv = document.createElement('div');
+  typeDiv.className = 'tt-type';
+  typeDiv.textContent = typeLabel + ' \u2022 ' + slot.count + '/' + invSlotMaxStack(slot);
+  invTooltipEl.appendChild(typeDiv);
+  if (info) {
+    var infoDiv = document.createElement('div');
+    infoDiv.className = 'tt-info';
+    infoDiv.textContent = info;
+    invTooltipEl.appendChild(infoDiv);
+  }
   invTooltipEl.style.display = 'block';
   moveInvTooltip(e);
 }
@@ -1712,6 +1695,8 @@ function doBreak(){
   if(id===OBSIDIAN||id===NPORTAL){ showMsg('Cannot break obsidian or portal blocks'); return; }
   setBlock(hit.x,hit.y,hit.z,AIR);
   sfxBreak(); swingHand();
+  invAdd('block', id, 1);
+  if(invOpen) buildInvGrid();
   if(ORE_NAMES[id]){ showMsg(ORE_NAMES[id]+' ore mined!'); hunger=Math.min(20,hunger+0.5); updateBars(); }
 }
 function doPlace(){
@@ -2217,7 +2202,7 @@ document.addEventListener('keydown', function(e){
   if(e.code==='F3'){ e.preventDefault(); toggleDebug(); return; }
   if(e.code==='Tab'){ e.preventDefault(); toggleMinimap(); return; }
   if(invOpen){
-    if(e.code==='Escape'||e.code==='KeyE'){ closeInventory(true); return; }
+    if(e.code==='KeyE'){ closeInventory(true); return; }
     if(e.code.indexOf('Digit')===0){
       var nd=parseInt(e.code.slice(5),10);
       if(nd>=1&&nd<=9) selectSlot(nd-1);
@@ -2541,6 +2526,20 @@ function pickBlock(){
     var s=inv.slots[i];
     if(s && s.type==='block' && s.id===bid){ selectSlot(i); showNavToast('Picked '+BLOCKS[bid].name+' [slot '+(i+1)+']'); return; }
   }
+  // find in main inventory and swap into selected hotbar slot
+  for(var i=9;i<45;i++){
+    var s=inv.slots[i];
+    if(s && s.type==='block' && s.id===bid){
+      var tmp=inv.slots[selIndex];
+      inv.slots[selIndex]=s;
+      inv.slots[i]=tmp;
+      syncInvToHotbar();
+      buildHotbar(); updateHand();
+      if(invOpen) buildInvGrid();
+      showNavToast('Picked '+BLOCKS[bid].name+' [slot '+(selIndex+1)+']');
+      return;
+    }
+  }
   // add to inventory or replace current slot
   if(!inv.slots[selIndex]){
     inv.slots[selIndex]=makeSlot('block', bid, 1);
@@ -2549,6 +2548,7 @@ function pickBlock(){
   }
   syncInvToHotbar();
   buildHotbar(); updateHand();
+  if(invOpen) buildInvGrid();
   showNavToast('Picked '+BLOCKS[bid].name+' into slot '+(selIndex+1));
 }
 
