@@ -234,6 +234,13 @@ defTool(IRON_SHOVEL,'Iron Shovel','shovel','iron',6,7,251);
 defTool(DIAM_PICK,'Diamond Pickaxe','pickaxe','diamond',8,10,1562);
 defTool(DIAM_AXE,'Diamond Axe','axe','diamond',8,11,1562);
 defTool(DIAM_SHOVEL,'Diamond Shovel','shovel','diamond',8,9,1562);
+// Sword IDs
+var WOOD_SWORD=53, STONE_SWORD=54, IRON_SWORD=55, DIAM_SWORD=56, NETHERITE_SWORD=57;
+defTool(WOOD_SWORD,'Wooden Sword','sword','wood',1,6,60);
+defTool(STONE_SWORD,'Stone Sword','sword','stone',1,8,132);
+defTool(IRON_SWORD,'Iron Sword','sword','iron',1,10,251);
+defTool(DIAM_SWORD,'Diamond Sword','sword','diamond',1,12,1562);
+defTool(NETHERITE_SWORD,'Netherite Sword','sword','netherite',1,14,2031);
 // Leather item
 var LEATHER=52;
 // Armor IDs (36-51)
@@ -279,6 +286,12 @@ var RECIPES=[
   {result:{id:DIAM_PICK,n:1},ing:[{id:DIAM,n:3},{id:STICK,n:2}]},
   {result:{id:DIAM_AXE,n:1},ing:[{id:DIAM,n:3},{id:STICK,n:2}]},
   {result:{id:DIAM_SHOVEL,n:1},ing:[{id:DIAM,n:1},{id:STICK,n:2}]},
+  // Sword recipes
+  {result:{id:WOOD_SWORD,n:1},ing:[{id:PLANK,n:2},{id:STICK,n:1}]},
+  {result:{id:STONE_SWORD,n:1},ing:[{id:STONE,n:2},{id:STICK,n:1}]},
+  {result:{id:IRON_SWORD,n:1},ing:[{id:IRON,n:2},{id:STICK,n:1}]},
+  {result:{id:DIAM_SWORD,n:1},ing:[{id:DIAM,n:2},{id:STICK,n:1}]},
+  {result:{id:NETHERITE_SWORD,n:1},ing:[{id:DIAM,n:2},{id:NETHERRACK,n:1}]},
   // Armor recipes
   {result:{id:LEATHER_HELM,n:1},ing:[{id:LEATHER,n:5}]},
   {result:{id:LEATHER_CHEST,n:1},ing:[{id:LEATHER,n:8}]},
@@ -1968,6 +1981,7 @@ var _tm={wood:[0.55,0.42,0.1],stone:[0.55,0.55,0.55],iron:[0.8,0.8,0.8],diamond:
 [STONE_PICK,STONE_AXE,STONE_SHOVEL].forEach(function(id){TOOL_RGB[id]=_tm.stone;});
 [IRON_PICK,IRON_AXE,IRON_SHOVEL].forEach(function(id){TOOL_RGB[id]=_tm.iron;});
 [DIAM_PICK,DIAM_AXE,DIAM_SHOVEL].forEach(function(id){TOOL_RGB[id]=_tm.diamond;});
+[WOOD_SWORD,STONE_SWORD,IRON_SWORD,DIAM_SWORD,NETHERITE_SWORD].forEach(function(id){TOOL_RGB[id]=_tm[TOOLS[id].mat]||_tm.stone;});
 var ARMOR_RGB={};
 [LEATHER_HELM,LEATHER_CHEST,LEATHER_LEGS,LEATHER_BOOTS].forEach(function(id){ARMOR_RGB[id]=_tm.leather;});
 [IRON_HELM,IRON_CHEST,IRON_LEGS,IRON_BOOTS].forEach(function(id){ARMOR_RGB[id]=_tm.iron;});
@@ -2413,6 +2427,10 @@ function drawToolIcon(g, toolId, sz){
   } else if(t.type==='shovel'){
     g.strokeStyle=hc; g.beginPath(); g.moveTo(sz*0.5,sz*0.9); g.lineTo(sz*0.5,sz*0.35); g.stroke();
     g.fillStyle=c; g.beginPath(); g.moveTo(sz*0.25,sz*0.3); g.lineTo(sz*0.75,sz*0.3); g.lineTo(sz*0.65,sz*0.05); g.lineTo(sz*0.35,sz*0.05); g.closePath(); g.fill();
+  } else if(t.type==='sword'){
+    g.strokeStyle=hc; g.beginPath(); g.moveTo(sz*0.5,sz*0.92); g.lineTo(sz*0.5,sz*0.35); g.stroke();
+    g.strokeStyle=c; g.lineWidth=Math.max(3,sz/7); g.beginPath(); g.moveTo(sz*0.5,sz*0.35); g.lineTo(sz*0.5,sz*0.05); g.stroke();
+    g.fillStyle=c; g.beginPath(); g.moveTo(sz*0.3,sz*0.33); g.lineTo(sz*0.7,sz*0.33); g.lineTo(sz*0.65,sz*0.28); g.lineTo(sz*0.35,sz*0.28); g.closePath(); g.fill();
   }
 }
 function drawBlockIcon(cv, id){
