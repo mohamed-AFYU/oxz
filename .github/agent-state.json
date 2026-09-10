@@ -5,16 +5,10 @@
   "status": "issues_found",
   "findings": [
     {
-      "title": "AO neighbor sampling uses face normal instead of tangent directions",
+      "title": "Stars are completely fogged out — invisible at night",
       "severity": "medium",
       "file": "index.html",
-      "detail": "The AO calculation uses d[0],d[1],d[2] (face normal) as tangent offsets for getBlock() calls. For a top face (d=[0,1,0]), s1=getBlock(vx2+0,vy2,vz2+0) checks the same block position — always air — so top/bottom faces always get AO=1.0 (no occlusion). For side faces, the normal direction is checked instead of the two perpendicular tangent axes. This makes AO shading wrong for every face orientation."
-    },
-    {
-      "title": "Particle drag is frame-rate dependent",
-      "severity": "low",
-      "file": "index.html",
-      "detail": "p.vx*=0.95; p.vz*=0.95; is applied per frame without scaling by dt. At 60fps this reduces velocity to ~4.6%/s; at 30fps it is ~21.5%/s. Particles decelerate at different rates depending on frame rate."
+      "detail": "Stars are placed at distance 150-200 from the player (starDist=150+hashF(...)*50) but rendered through the mob shader (progM) with fog parameters uFogNearM=26, uFogFarM=80. At distance 150, the fog factor computes to clamp((150-26)/(80-26), 0, 1) = 1.0, so all 80 stars are fully blended into the fog color (which matches the night sky color), making them invisible. The twinkle logic is correct but stars can never be seen."
     }
   ],
   "history": [
@@ -26,6 +20,11 @@
     {
       "agent": "review",
       "cycle": 1,
+      "result": "issues_found"
+    },
+    {
+      "agent": "review",
+      "cycle": 2,
       "result": "issues_found"
     }
   ]
