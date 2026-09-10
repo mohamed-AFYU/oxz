@@ -49,7 +49,36 @@
   #vignette { position:absolute; inset:0; pointer-events:none; z-index:10; background:radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,.45) 100%); }
   #damage-flash { position:absolute; inset:0; pointer-events:none; z-index:30; background:radial-gradient(ellipse at center, transparent 40%, rgba(255,0,0,.55) 100%); opacity:0; transition:opacity .15s; }
   #msg { position:absolute; top:70px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.7); color:#fff; padding:8px 16px; border-radius:6px; font-size:14px; z-index:25; opacity:0; transition:opacity .3s; pointer-events:none; white-space:nowrap; }
-  @media (max-width:640px){ .title{font-size:36px;} .slot{width:40px;height:48px;} }
+  /* F3 Debug Overlay */
+  #debug-overlay { position:absolute; top:10px; left:10px; background:rgba(0,0,0,.72); color:#fff; padding:8px 12px; border-radius:6px; font:12px/1.6 monospace; z-index:40; pointer-events:none; white-space:pre; min-width:260px; }
+  #debug-overlay .section { color:#ffe27a; font-weight:bold; }
+  #debug-overlay .val { color:#a8ff8a; }
+  #debug-overlay .warn { color:#ff5555; }
+
+  /* Minimap */
+  #minimap-container { position:absolute; top:110px; right:10px; z-index:40; pointer-events:none; }
+  #minimap { width:160px; height:160px; border-radius:50%; border:3px solid rgba(255,255,255,.5); background:rgba(0,0,0,.55); overflow:hidden; position:relative; }
+  #minimap canvas { width:100%; height:100%; border-radius:50%; }
+  #minimap .dir-label { position:absolute; font:10px monospace; color:#fff; text-shadow:1px 1px 0 #000; }
+  #minimap .dir-n { top:2px; left:50%; transform:translateX(-50%); }
+  #minimap .dir-s { bottom:2px; left:50%; transform:translateX(-50%); }
+  #minimap .dir-e { right:4px; top:50%; transform:translateY(-50%); }
+  #minimap .dir-w { left:4px; top:50%; transform:translateY(-50%); }
+  #minimap .player-dot { position:absolute; width:8px; height:8px; background:#ff4444; border:2px solid #fff; border-radius:50%; top:50%; left:50%; transform:translate(-50%,-50%); z-index:2; box-shadow:0 0 6px #f00; }
+  #minimap .waypoint-dot { position:absolute; width:6px; height:6px; background:#00ccff; border:1px solid #fff; border-radius:50%; transform:translate(-50%,-50%); z-index:1; }
+
+  /* Waypoint List */
+  #waypoint-list { position:absolute; top:180px; right:10px; background:rgba(0,0,0,.75); color:#fff; padding:8px 12px; border-radius:6px; font:12px/1.6 monospace; z-index:40; pointer-events:none; min-width:180px; max-height:260px; overflow-y:auto; }
+  #waypoint-list .wp-title { color:#ffe27a; font-weight:bold; margin-bottom:4px; }
+  #waypoint-list .wp-item { padding:2px 0; }
+  #waypoint-list .wp-item .wp-name { color:#00ccff; }
+  #waypoint-list .wp-item .wp-dist { color:#aaa; font-size:10px; }
+
+  /* Navigation toast */
+  #nav-toast { position:absolute; bottom:100px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,.8); color:#fff; padding:10px 20px; border-radius:8px; font:14px sans-serif; z-index:35; pointer-events:none; opacity:0; transition:opacity .3s; white-space:nowrap; }
+  #nav-toast.show { opacity:1; }
+
+  @media (max-width:640px){ .title{font-size:36px;} .slot{width:40px;height:48px;} #minimap{width:110px;height:110px;} }
 </style>
 </head>
 <body>
@@ -70,6 +99,19 @@
 <div id="crosshair"></div>
 <div id="hand"><div id="hand-inner"><div id="hand-arm"></div><canvas id="hand-block" width="16" height="16"></canvas></div></div>
 <div id="msg"></div>
+<div id="nav-toast"></div>
+<div id="debug-overlay" class="hidden"></div>
+<div id="minimap-container" class="hidden">
+  <div id="minimap">
+    <canvas id="minimap-canvas" width="320" height="320"></canvas>
+    <div class="player-dot"></div>
+    <div class="dir-label dir-n">N</div>
+    <div class="dir-label dir-s">S</div>
+    <div class="dir-label dir-e">E</div>
+    <div class="dir-label dir-w">W</div>
+  </div>
+</div>
+<div id="waypoint-list" class="hidden"></div>
 
 <div id="start-screen" class="screen">
   <div class="title">VOXELCRAFT</div>
@@ -78,9 +120,12 @@
     <div style="font-size:15px;color:#cfc;">Explore infinite biomes, mine ores in caves, fight mobs at night. The world generates around you forever.</div>
     <div class="controls">
       <div><b>W A S D</b> Move &nbsp; <b>Mouse</b> Look &nbsp; <b>Space</b> Jump / Swim</div>
-      <div><b>Left Click</b> Attack / Break &nbsp; <b>Right Click</b> Place block</div>
+      <div><b>Left Click</b> Attack / Break &nbsp; <b>Right Click</b> Place block &nbsp; <b>Middle Click</b> Pick block</div>
       <div><b>1 &ndash; 9</b> Hotbar &nbsp; <b>Wheel</b> Cycle &nbsp; <b>E</b> Inventory &nbsp; <b>Q</b> Drop item</div>
       <div><b>F</b> Fly &nbsp; <b>R</b> Morning &nbsp; <b>Shift</b> Sprint &nbsp; <b>Esc</b> Pause</div>
+      <div style="color:#ffe27a;margin-top:6px;">--- Navigation ---</div>
+      <div><b>F3</b> Debug overlay &nbsp; <b>Tab</b> Minimap &nbsp; <b>B</b> Set waypoint</div>
+      <div><b>N</b> Next waypoint &nbsp; <b>G</b> Safe teleport &nbsp; <b>X</b> Remove waypoint</div>
     </div>
     <div id="loading">Generating world&hellip;</div>
     <button class="btn" id="play-btn" style="display:none;">&#9935; Click to Play</button>
@@ -94,8 +139,11 @@
     <div class="controls">
       <div><b>WASD / Mouse</b> Move &amp; look</div>
       <div><b>Left / Right click</b> Attack-Break / Place</div>
-      <div><b>1-9 / Wheel</b> Hotbar &nbsp; <b>E</b> Inventory &nbsp; <b>Q</b> Drop</div>
-      <div><b>F</b> Fly &nbsp; <b>R</b> Morning &nbsp; <b>Esc</b> Pause</div>
+      <div><b>Middle Click</b> Pick block &nbsp; <b>1-9 / Wheel</b> Hotbar</div>
+      <div><b>E</b> Inventory &nbsp; <b>Q</b> Drop &nbsp; <b>F</b> Fly &nbsp; <b>R</b> Morning</div>
+      <div style="color:#ffe27a;margin-top:6px;">--- Navigation ---</div>
+      <div><b>F3</b> Debug &nbsp; <b>Tab</b> Minimap &nbsp; <b>B</b> Set waypoint</div>
+      <div><b>N</b> Next waypoint &nbsp; <b>G</b> Safe teleport &nbsp; <b>X</b> Remove waypoint</div>
     </div>
     <button class="btn" id="resume-btn">&#9654; Resume Game</button>
     <button class="btn gray" id="respawn-btn">Respawn</button>
@@ -1298,6 +1346,9 @@ document.addEventListener('keydown', function(e){
   keys[e.code]=true;
   if(!playing) return;
   if(e.code==='Escape'){ if(invOpen) closeInventory(true); return; }
+  // --- Navigation/debug shortcuts (work even in inventory) ---
+  if(e.code==='F3'){ e.preventDefault(); toggleDebug(); return; }
+  if(e.code==='Tab'){ e.preventDefault(); toggleMinimap(); return; }
   if(invOpen){
     if(e.code.indexOf('Digit')===0){
       var nd=parseInt(e.code.slice(5),10);
@@ -1314,6 +1365,11 @@ document.addEventListener('keydown', function(e){
   else if(e.code==='KeyQ'){ dropSelected(); }
   else if(e.code==='KeyF'){ player.fly=!player.fly; player.vy=0; showMsg(player.fly?'Fly enabled (Space up / C down)':'Fly disabled'); }
   else if(e.code==='KeyR'){ timeOfDay=0.32; showMsg('Skipped to morning'); }
+  // --- Navigation shortcuts ---
+  else if(e.code==='KeyB'){ setWaypoint(); }
+  else if(e.code==='KeyN'){ cycleWaypoint(); }
+  else if(e.code==='KeyG'){ teleportToGround(); }
+  else if(e.code==='KeyX'){ if(waypoints.length>0){ removeWaypoint(waypoints.length-1); } }
   // Only prevent the single default that interferes with locked play (page scroll on Space).
   if(e.code==='Space') e.preventDefault();
 });
@@ -1329,6 +1385,7 @@ document.addEventListener('mousedown', function(e){
   if(!playing||!locked||invOpen) return;
   if(e.button===0){ if(!attackMobs()) doBreak(); breakHeld=true; }
   if(e.button===2){ doPlace(); }
+  if(e.button===1){ e.preventDefault(); pickBlock(); }
 });
 document.addEventListener('mouseup', function(e){ if(e.button===0) breakHeld=false; });
 document.addEventListener('contextmenu', function(e){
@@ -1410,6 +1467,214 @@ document.getElementById('play-btn').addEventListener('click', function(){
 document.getElementById('resume-btn').addEventListener('click', function(){ audioInit(); lockPointer(); });
 document.getElementById('respawn-btn').addEventListener('click', function(){ respawn(); lockPointer(); });
 document.getElementById('inv-close').addEventListener('click', function(){ audioInit(); closeInventory(true); });
+
+// ---------- Navigation Shortcuts System ----------
+var debugVisible = false;
+var minimapVisible = false;
+var waypoints = [];
+var waypointIdx = -1;
+var navToastTimer = null;
+
+function showNavToast(text, dur){
+  var el = document.getElementById('nav-toast');
+  el.textContent = text; el.classList.add('show');
+  clearTimeout(navToastTimer);
+  navToastTimer = setTimeout(function(){ el.classList.remove('show'); }, dur||2500);
+}
+
+// --- F3 Debug Overlay ---
+function toggleDebug(){
+  debugVisible = !debugVisible;
+  var el = document.getElementById('debug-overlay');
+  el.classList.toggle('hidden', !debugVisible);
+}
+function updateDebug(){
+  if(!debugVisible) return;
+  var el = document.getElementById('debug-overlay');
+  var pc = chunkCoords(player.x, player.z);
+  var b = biomeAt(Math.floor(player.x), Math.floor(player.z));
+  var isDay = (timeOfDay>0.25 && timeOfDay<0.75);
+  var hh = Math.floor(timeOfDay*24), mm = Math.floor((timeOfDay*24-hh)*60);
+  var dayNum = Math.floor(perfTime/DAY_LEN)+1;
+  var facing;
+  var yawDeg = ((player.yaw * 180 / Math.PI) % 360 + 360) % 360;
+  if(yawDeg>315||yawDeg<=45) facing='South';
+  else if(yawDeg>45&&yawDeg<=135) facing='West';
+  else if(yawDeg>135&&yawDeg<=225) facing='North';
+  else facing='East';
+  var line = '<span class="section">VoxelCraft Debug (F3)</span>\n';
+  line += '<span class="section">XYZ:</span> <span class="val">'+player.x.toFixed(1)+' / '+player.y.toFixed(1)+' / '+player.z.toFixed(1)+'</span>\n';
+  line += '<span class="section">Chunk:</span> <span class="val">'+pc[0]+', '+pc[1]+'</span>';
+  line += '  <span class="section">Block:</span> <span class="val">'+Math.floor(player.x)+', '+Math.floor(player.y)+', '+Math.floor(player.z)+'</span>\n';
+  line += '<span class="section">Facing:</span> <span class="val">'+facing+' ('+yawDeg.toFixed(0)+'°)</span>\n';
+  line += '<span class="section">Biome:</span> <span class="val">'+BIOME_NAMES[b.biome]+'</span>\n';
+  line += '<span class="section">Light:</span> <span class="val">'+(isDay?'Day':'Night')+' (t='+timeOfDay.toFixed(3)+')</span>\n';
+  line += '<span class="section">Time:</span> <span class="val">Day '+dayNum+' '+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0')+'</span>\n';
+  line += '<span class="section">Weather:</span> <span class="val">'+weather.type+'</span>\n';
+  line += '<span class="section">Chunks:</span> <span class="val">'+chunks.size+' loaded</span>';
+  line += '  <span class="section">Mobs:</span> <span class="val">'+mobs.length+'</span>';
+  line += '  <span class="section">Pickups:</span> <span class="val">'+pickups.length+'</span>\n';
+  line += '<span class="section">Health:</span> <span class="'+(health<=6?'warn':'val')+'">'+Math.max(0,Math.round(health))+'/20</span>';
+  line += '  <span class="section">Hunger:</span> <span class="val">'+Math.max(0,Math.round(hunger))+'/20</span>\n';
+  line += '<span class="section">Fly:</span> <span class="val">'+(player.fly?'ON':'OFF')+'</span>';
+  line += '  <span class="section">Waypoints:</span> <span class="val">'+waypoints.length+'</span>\n';
+  line += '<span class="section">Seed:</span> <span class="val">'+WORLD_SEED+'</span>';
+  el.innerHTML = line;
+}
+
+// --- Tab Minimap ---
+var minimapCanvas = document.getElementById('minimap-canvas');
+var minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+var MINIMAP_RANGE = 80;
+function toggleMinimap(){
+  minimapVisible = !minimapVisible;
+  document.getElementById('minimap-container').classList.toggle('hidden', !minimapVisible);
+}
+function updateMinimap(){
+  if(!minimapVisible || !minimapCtx) return;
+  var c = minimapCtx;
+  var w = minimapCanvas.width, h = minimapCanvas.height;
+  var cx = w/2, cy = h/2;
+  c.clearRect(0,0,w,h);
+  // draw terrain
+  var step = 4;
+  for(var sx=0; sx<w; sx+=step) for(var sy=0; sy<h; sy+=step){
+    var dx = (sx - cx) / cx * MINIMAP_RANGE;
+    var dz = (sy - cy) / cy * MINIMAP_RANGE;
+    var wx = player.x + dx * Math.cos(player.yaw) - dz * Math.sin(player.yaw);
+    var wz = player.z + dx * Math.sin(player.yaw) + dz * Math.cos(player.yaw);
+    var sy2 = surfaceY(wx, wz);
+    if(sy2 < 0) continue;
+    var bid = getBlock(Math.floor(wx), sy2, Math.floor(wz));
+    var col;
+    if(bid===WATER) col='rgba(30,80,180,0.8)';
+    else if(bid===SAND) col='rgba(220,200,140,0.8)';
+    else if(bid===SNOWG) col='rgba(230,240,250,0.8)';
+    else if(bid===GRASS) col='rgba(80,160,50,0.8)';
+    else if(bid===STONE||bid===COAL||bid===IRON||bid===GOLD||bid===DIAM) col='rgba(130,130,130,0.8)';
+    else col='rgba(100,130,80,0.6)';
+    c.fillStyle=col;
+    c.fillRect(sx,sy,step,step);
+  }
+  // draw waypoints
+  for(var i=0; i<waypoints.length; i++){
+    var wp = waypoints[i];
+    var ddx = wp.x - player.x, ddz = wp.z - player.z;
+    var rx = ddx * Math.cos(-player.yaw) - ddz * Math.sin(-player.yaw);
+    var rz = ddx * Math.sin(-player.yaw) + ddz * Math.cos(-player.yaw);
+    var px = cx + (rx / MINIMAP_RANGE) * cx;
+    var py = cy + (rz / MINIMAP_RANGE) * cy;
+    if(px<0||px>w||py<0||py>h) continue;
+    c.fillStyle='#00ccff';
+    c.beginPath();
+    c.arc(px, py, 5, 0, Math.PI*2);
+    c.fill();
+    c.fillStyle='#fff';
+    c.font='bold 10px monospace';
+    c.fillText(wp.name, px+7, py+3);
+  }
+  // player direction indicator
+  c.fillStyle='#ff4444';
+  c.beginPath();
+  c.moveTo(cx, cy-8);
+  c.lineTo(cx-5, cy+4);
+  c.lineTo(cx+5, cy+4);
+  c.closePath();
+  c.fill();
+}
+
+// --- Waypoint System (B) ---
+function saveWaypoints(){
+  try { localStorage.setItem('vc_waypoints', JSON.stringify(waypoints)); } catch(e){}
+}
+function loadWaypoints(){
+  try { var d=localStorage.getItem('vc_waypoints'); if(d) waypoints=JSON.parse(d); } catch(e){}
+}
+loadWaypoints();
+function setWaypoint(){
+  var name='WP'+(waypoints.length+1);
+  waypoints.push({name:name, x:player.x, y:player.y, z:player.z, biome:biomeAt(Math.floor(player.x),Math.floor(player.z)).biome});
+  saveWaypoints();
+  showNavToast('Waypoint "'+name+'" set at '+player.x.toFixed(0)+', '+player.y.toFixed(0)+', '+player.z.toFixed(0));
+  updateWaypointList();
+}
+function removeWaypoint(idx){
+  if(idx<0||idx>=waypoints.length) return;
+  var name=waypoints[idx].name;
+  waypoints.splice(idx,1);
+  saveWaypoints();
+  showNavToast('Waypoint "'+name+'" removed');
+  updateWaypointList();
+}
+function cycleWaypoint(){
+  if(waypoints.length===0){ showNavToast('No waypoints set. Press B to set one.'); return; }
+  waypointIdx = (waypointIdx+1) % waypoints.length;
+  teleportToWaypoint(waypointIdx);
+}
+function teleportToWaypoint(idx){
+  var wp = waypoints[idx];
+  if(!wp) return;
+  var sy = surfaceY(wp.x, wp.z);
+  player.x = wp.x; player.z = wp.z;
+  player.y = (sy>0 ? sy : H-2) + 1.01;
+  player.vx = player.vy = player.vz = 0;
+  showNavToast('Teleported to "'+wp.name+'" ('+wp.x.toFixed(0)+', '+wp.y.toFixed(0)+', '+wp.z.toFixed(0)+')');
+  updateStreaming(true);
+  updateWaypointList();
+}
+function updateWaypointList(){
+  var el = document.getElementById('waypoint-list');
+  if(waypoints.length===0){ el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  var html='<div class="wp-title">Waypoints [B=set / N=cycle]</div>';
+  for(var i=0; i<waypoints.length; i++){
+    var wp=waypoints[i];
+    var dx=wp.x-player.x, dz=wp.z-player.z;
+    var dist=Math.sqrt(dx*dx+dz*dz).toFixed(0);
+    html+='<div class="wp-item"><span class="wp-name">'+(i+1)+'. '+wp.name+'</span> <span class="wp-dist">'+dist+'m</span></div>';
+  }
+  html+='<div style="color:#888;font-size:10px;margin-top:4px;">X=remove last</div>';
+  el.innerHTML = html;
+}
+
+// --- G: Safe Ground Teleport ---
+function teleportToGround(){
+  var range=40;
+  for(var r=0; r<range; r+=2){
+    for(var a=0; a<8; a++){
+      var ang=a/8*Math.PI*2;
+      var tx=player.x+Math.cos(ang)*r, tz=player.z+Math.sin(ang)*r;
+      var sy=surfaceY(tx, tz);
+      if(sy>WATER_LEVEL+1 && sy>0){
+        var bid=getBlock(Math.floor(tx),sy,Math.floor(tz));
+        if(bid!==WATER && bid!==CACTUS && bid!==AIR){
+          player.x=tx+0.5; player.z=tz+0.5;
+          player.y=sy+1.01;
+          player.vx=player.vy=player.vz=0;
+          showNavToast('Teleported to safe ground');
+          updateStreaming(true);
+          return;
+        }
+      }
+    }
+  }
+  showNavToast('No safe ground found nearby');
+}
+
+// --- Middle-click: Pick block from world ---
+function pickBlock(){
+  var hit=raycast(eyePos(), lookDir(), REACH);
+  if(!hit) return;
+  var bid=hit.id;
+  // find if already in hotbar
+  for(var i=0;i<9;i++){
+    if(HOTBAR[i]===bid){ selectSlot(i); showNavToast('Picked '+BLOCKS[bid].name+' [slot '+(i+1)+']'); return; }
+  }
+  // replace current slot
+  HOTBAR[selIndex]=bid;
+  buildHotbar(); updateHand();
+  showNavToast('Picked '+BLOCKS[bid].name+' into slot '+(selIndex+1));
+}
 
 // ---------- Hotbar UI ----------
 var hotbarEl=document.getElementById('hotbar');
@@ -1534,6 +1799,9 @@ function loop(){
       updateAmbient(dt);
       if(atkCd>0) atkCd-=dt;
       perfTime+=dt;
+      updateDebug();
+      updateMinimap();
+      if(waypoints.length>0 && Math.floor(perfTime)%3===0) updateWaypointList();
     }
   }
   mat4View(viewMat,[player.x,player.y+EYE,player.z],player.yaw,player.pitch);
