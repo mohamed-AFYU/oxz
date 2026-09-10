@@ -96,6 +96,7 @@
   <div id="time-label">Day 1 08:00</div>
   <div id="biome-label">Plains</div>
   <div id="stats">
+    <div class="bar" id="armor"></div>
     <div class="bar" id="health"></div>
     <div class="bar" id="hunger"></div>
   </div>
@@ -233,6 +234,35 @@ defTool(IRON_SHOVEL,'Iron Shovel','shovel','iron',6,7,251);
 defTool(DIAM_PICK,'Diamond Pickaxe','pickaxe','diamond',8,10,1562);
 defTool(DIAM_AXE,'Diamond Axe','axe','diamond',8,11,1562);
 defTool(DIAM_SHOVEL,'Diamond Shovel','shovel','diamond',8,9,1562);
+// Leather item
+var LEATHER=52;
+// Armor IDs (36-51)
+var LEATHER_HELM=36, LEATHER_CHEST=37, LEATHER_LEGS=38, LEATHER_BOOTS=39;
+var IRON_HELM=40, IRON_CHEST=41, IRON_LEGS=42, IRON_BOOTS=43;
+var DIAM_HELM=44, DIAM_CHEST=45, DIAM_LEGS=46, DIAM_BOOTS=47;
+var NETHERITE_HELM=48, NETHERITE_CHEST=49, NETHERITE_LEGS=50, NETHERITE_BOOTS=51;
+// Armor metadata: id -> {name, type, mat, prot, dur}
+var ARMOR={};
+function defArmor(id,nm,tp,mt,pr,dp){ ARMOR[id]={name:nm,type:tp,mat:mt,prot:pr,dur:dp}; }
+defArmor(LEATHER_HELM,'Leather Helmet','helmet','leather',2,56);
+defArmor(LEATHER_CHEST,'Leather Tunic','chestplate','leather',6,81);
+defArmor(LEATHER_LEGS,'Leather Pants','leggings','leather',5,76);
+defArmor(LEATHER_BOOTS,'Leather Boots','boots','leather',2,66);
+defArmor(IRON_HELM,'Iron Helmet','helmet','iron',2,166);
+defArmor(IRON_CHEST,'Iron Chestplate','chestplate','iron',6,241);
+defArmor(IRON_LEGS,'Iron Leggings','leggings','iron',5,226);
+defArmor(IRON_BOOTS,'Iron Boots','boots','iron',2,196);
+defArmor(DIAM_HELM,'Diamond Helmet','helmet','diamond',3,364);
+defArmor(DIAM_CHEST,'Diamond Chestplate','chestplate','diamond',8,529);
+defArmor(DIAM_LEGS,'Diamond Leggings','leggings','diamond',7,496);
+defArmor(DIAM_BOOTS,'Diamond Boots','boots','diamond',3,430);
+defArmor(NETHERITE_HELM,'Netherite Helmet','helmet','netherite',3,407);
+defArmor(NETHERITE_CHEST,'Netherite Chestplate','chestplate','netherite',8,592);
+defArmor(NETHERITE_LEGS,'Netherite Leggings','leggings','netherite',7,555);
+defArmor(NETHERITE_BOOTS,'Netherite Boots','boots','netherite',3,481);
+// Armor equipped slots: {helmet, chestplate, leggings, boots} -> inventory slot index or -1
+var armorSlots={helmet:-1, chestplate:-1, leggings:-1, boots:-1};
+function isArmor(id){ return !!ARMOR[id]; }
 // Crafting recipes: {result:{id,n}, ing:[{id,n}...]}
 var RECIPES=[
   {result:{id:PLANK,n:4},ing:[{id:LOG,n:1}]},
@@ -248,9 +278,26 @@ var RECIPES=[
   {result:{id:IRON_SHOVEL,n:1},ing:[{id:IRON,n:1},{id:STICK,n:2}]},
   {result:{id:DIAM_PICK,n:1},ing:[{id:DIAM,n:3},{id:STICK,n:2}]},
   {result:{id:DIAM_AXE,n:1},ing:[{id:DIAM,n:3},{id:STICK,n:2}]},
-  {result:{id:DIAM_SHOVEL,n:1},ing:[{id:DIAM,n:1},{id:STICK,n:2}]}
+  {result:{id:DIAM_SHOVEL,n:1},ing:[{id:DIAM,n:1},{id:STICK,n:2}]},
+  // Armor recipes
+  {result:{id:LEATHER_HELM,n:1},ing:[{id:LEATHER,n:5}]},
+  {result:{id:LEATHER_CHEST,n:1},ing:[{id:LEATHER,n:8}]},
+  {result:{id:LEATHER_LEGS,n:1},ing:[{id:LEATHER,n:7}]},
+  {result:{id:LEATHER_BOOTS,n:1},ing:[{id:LEATHER,n:4}]},
+  {result:{id:IRON_HELM,n:1},ing:[{id:IRON,n:5}]},
+  {result:{id:IRON_CHEST,n:1},ing:[{id:IRON,n:8}]},
+  {result:{id:IRON_LEGS,n:1},ing:[{id:IRON,n:7}]},
+  {result:{id:IRON_BOOTS,n:1},ing:[{id:IRON,n:4}]},
+  {result:{id:DIAM_HELM,n:1},ing:[{id:DIAM,n:5}]},
+  {result:{id:DIAM_CHEST,n:1},ing:[{id:DIAM,n:8}]},
+  {result:{id:DIAM_LEGS,n:1},ing:[{id:DIAM,n:7}]},
+  {result:{id:DIAM_BOOTS,n:1},ing:[{id:DIAM,n:4}]},
+  {result:{id:NETHERITE_HELM,n:1},ing:[{id:DIAM,n:3},{id:NETHERRACK,n:4}]},
+  {result:{id:NETHERITE_CHEST,n:1},ing:[{id:DIAM,n:6},{id:NETHERRACK,n:4}]},
+  {result:{id:NETHERITE_LEGS,n:1},ing:[{id:DIAM,n:5},{id:NETHERRACK,n:4}]},
+  {result:{id:NETHERITE_BOOTS,n:1},ing:[{id:DIAM,n:2},{id:NETHERRACK,n:4}]}
 ];
-function getItemName(id){ if(TOOLS[id]) return TOOLS[id].name; if(BLOCKS[id]) return BLOCKS[id].name; return 'Unknown'; }
+function getItemName(id){ if(TOOLS[id]) return TOOLS[id].name; if(ARMOR[id]) return ARMOR[id].name; if(id===LEATHER) return 'Leather'; if(BLOCKS[id]) return BLOCKS[id].name; return 'Unknown'; }
 function isTool(id){ return !!TOOLS[id]; }
 // Inventory: 36 slots (0-8 = hotbar, 9-35 = main inventory)
 var inv=[];
@@ -263,6 +310,7 @@ function saveInv(){
     var data=[];
     for(var i=0;i<36;i++) data.push({id:inv[i].id,n:inv[i].n,dur:invDur[i]});
     localStorage.setItem('vc_inventory',JSON.stringify(data));
+    localStorage.setItem('vc_armor',JSON.stringify(armorSlots));
   }catch(e){}
 }
 function loadInv(){
@@ -276,15 +324,28 @@ function loadInv(){
         inv[i].id=data[i].id; inv[i].n=data[i].n||0; invDur[i]=data[i].dur||0;
       }
     }
+    var armorRaw=localStorage.getItem('vc_armor');
+    if(armorRaw){
+      var saved=JSON.parse(armorRaw);
+      if(saved){
+        for(var slot in saved){
+          if(saved[slot]>=0 && inv[saved[slot]] && inv[saved[slot]].n>0 && isArmor(inv[saved[slot]].id)){
+            armorSlots[slot]=saved[slot];
+          } else {
+            armorSlots[slot]=-1;
+          }
+        }
+      }
+    }
     return true;
   }catch(e){ return false; }
 }
 function invCount(slotId){ return inv[slotId]?inv[slotId].n:0; }
 function invAdd(id,n,dur){
   if(id===AIR||n<=0) return 0;
-  if(isTool(id)){
+  if(isTool(id)||isArmor(id)){
     for(var i=0;i<36;i++){
-      if(inv[i].n===0){ inv[i].id=id; inv[i].n=1; invDur[i]=dur!=null?dur:TOOLS[id].dur; return 1; }
+      if(inv[i].n===0){ inv[i].id=id; inv[i].n=1; invDur[i]=dur!=null?dur:(ARMOR[id]?ARMOR[id].dur:(TOOLS[id]?TOOLS[id].dur:0)); return 1; }
     }
     return 0;
   }
@@ -1109,7 +1170,11 @@ function movePlayer(dt){
 function damage(n){
   if(dead) return;
   if(hurtTimer>0&&n<900) return;
-  health-=n; hurtTimer=0.6; flash(); sfxHurt();
+  // Apply armor reduction
+  var armorProt=getArmorProtection();
+  var reduced=Math.max(0,Math.round(n*(1-armorProt)));
+  if(reduced<n) damageArmor(Math.max(1,Math.round(n/4)));
+  health-=reduced; hurtTimer=0.6; flash(); sfxHurt();
   updateBars();
   if(health<=0){ health=0; dead=true; updateBars(); showMsg('You died! Respawning...'); setTimeout(respawn,1500); }
 }
@@ -1124,6 +1189,87 @@ function respawn(){
   player.vx=player.vy=player.vz=0; health=20; hunger=20; dead=false; updateBars();
 }
 function flash(){ var el=document.getElementById('damage-flash'); el.style.opacity=1; setTimeout(function(){el.style.opacity=0;},180); }
+// ---------- Armor System ----------
+function getArmorProtection(){
+  var total=0;
+  for(var slot in armorSlots){
+    var si=armorSlots[slot];
+    if(si>=0 && inv[si].id && ARMOR[inv[si].id]) total+=ARMOR[inv[si].id].prot;
+  }
+  return Math.min(total,20); // cap at 20 (100%)
+}
+function damageArmor(amount){
+  for(var slot in armorSlots){
+    var si=armorSlots[slot];
+    if(si<0) continue;
+    var id=inv[si].id;
+    if(!id||!ARMOR[id]) continue;
+    invDur[si]-=amount;
+    if(invDur[si]<=0){
+      inv[si].id=AIR; inv[si].n=0; invDur[si]=0;
+      armorSlots[slot]=-1;
+      sfxBreak(); showMsg('Armor broke!');
+    }
+  }
+  saveInv();
+}
+function equipArmor(invSlot){
+  var id=inv[invSlot].id;
+  if(!id||!ARMOR[id]) return false;
+  var type=ARMOR[id].type;
+  // If same type already equipped, swap
+  var curSlot=armorSlots[type];
+  if(curSlot===invSlot) return false; // already equipped here
+  // Unequip current armor of this type first
+  if(curSlot>=0 && inv[curSlot].n>0){
+    // armor stays in its inventory slot, just unreference
+  }
+  armorSlots[type]=invSlot;
+  saveInv();
+  return true;
+}
+function unequipArmor(type){
+  if(armorSlots[type]>=0){
+    armorSlots[type]=-1;
+    saveInv();
+  }
+}
+function getArmorColor(mat){
+  var mc={leather:[0.55,0.35,0.15],iron:[0.8,0.8,0.8],diamond:[0.3,0.85,0.9],netherite:[0.25,0.2,0.3]};
+  return mc[mat]||[0.5,0.5,0.5];
+}
+function drawArmorIcon(g, armorId, sz){
+  var a=ARMOR[armorId]; if(!a) return;
+  var c=getArmorColor(a.mat);
+  var r=Math.floor(c[0]*255),gg=Math.floor(c[1]*255),b=Math.floor(c[2]*255);
+  var col='rgb('+r+','+gg+','+b+')';
+  g.fillStyle=col;
+  g.strokeStyle='rgba(0,0,0,0.4)';
+  g.lineWidth=1;
+  if(a.type==='helmet'){
+    g.fillRect(sz*0.2,sz*0.15,sz*0.6,sz*0.55);
+    g.strokeRect(sz*0.2,sz*0.15,sz*0.6,sz*0.55);
+    g.fillRect(sz*0.15,sz*0.35,sz*0.12,sz*0.35);
+    g.fillRect(sz*0.73,sz*0.35,sz*0.12,sz*0.35);
+  } else if(a.type==='chestplate'){
+    g.fillRect(sz*0.15,sz*0.12,sz*0.7,sz*0.7);
+    g.strokeRect(sz*0.15,sz*0.12,sz*0.7,sz*0.7);
+    g.fillRect(sz*0.05,sz*0.15,sz*0.12,sz*0.55);
+    g.fillRect(sz*0.83,sz*0.15,sz*0.12,sz*0.55);
+  } else if(a.type==='leggings'){
+    g.fillRect(sz*0.2,sz*0.1,sz*0.6,sz*0.35);
+    g.strokeRect(sz*0.2,sz*0.1,sz*0.6,sz*0.35);
+    g.fillRect(sz*0.2,sz*0.45,sz*0.25,sz*0.45);
+    g.fillRect(sz*0.55,sz*0.45,sz*0.25,sz*0.45);
+  } else if(a.type==='boots'){
+    g.fillRect(sz*0.2,sz*0.25,sz*0.28,sz*0.55);
+    g.fillRect(sz*0.52,sz*0.25,sz*0.28,sz*0.55);
+    g.strokeRect(sz*0.15,sz*0.6,sz*0.35,sz*0.25);
+    g.strokeRect(sz*0.5,sz*0.6,sz*0.35,sz*0.25);
+    g.fillRect(sz*0.15,sz*0.6,sz*0.35,sz*0.25);
+    g.fillRect(sz*0.5,sz*0.6,sz*0.35,sz*0.25);
+  }
+}
 var msgT=null;
 function showMsg(t){ var m=document.getElementById('msg'); m.textContent=t; m.style.opacity=1; clearTimeout(msgT); msgT=setTimeout(function(){m.style.opacity=0;},2200); }
 
@@ -1295,6 +1441,13 @@ function hurtMob(m, dmg, kx, kz){
     pickups.push({x:m.x,y:m.y+0.6,z:m.z,vx:(Math.random()-0.5)*3,vy:4,vz:(Math.random()-0.5)*3,
       kind:d.drop[0], nut:d.drop[1], t:0});
     if(pickups.length>30) pickups.shift();
+    // Cows also drop leather
+    if(m.type==='cow'){
+      pickups.push({x:m.x+(Math.random()-0.5)*0.5,y:m.y+0.6,z:m.z+(Math.random()-0.5)*0.5,
+        vx:(Math.random()-0.5)*3,vy:4,vz:(Math.random()-0.5)*3,
+        kind:'Leather', nut:0, t:0, col:[0.55,0.35,0.15], blockId:LEATHER, blockCount:1});
+      if(pickups.length>30) pickups.shift();
+    }
     showMsg(d.name+' slain! ('+kills+' kills)');
   } else if(!MOB_DEFS[m.type].hostile){
     m.yaw=Math.atan2(-kx,-kz); // flee: turn away (approx)
@@ -1809,13 +1962,18 @@ document.addEventListener('pointerlockchange', function(){
 });
 // ---------- Inventory (E) & dropping (Q) ----------
 var BLOCK_RGB={1:[0.42,0.75,0.19],2:[0.54,0.37,0.24],3:[0.55,0.55,0.55],4:[0.42,0.29,0.16],5:[0.25,0.49,0.17],6:[0.89,0.84,0.61],7:[0.65,0.49,0.23],8:[0.81,0.91,0.96],9:[0.64,0.29,0.23],10:[0.2,0.47,0.86],11:[0.3,0.3,0.3],12:[0.85,0.63,0.48],13:[0.96,0.84,0.26],14:[0.43,0.95,0.95],15:[0.95,0.97,0.97],16:[0.25,0.57,0.25],17:[0.55,0.1,0.06],18:[0.5,0.2,0.8],19:[0.1,0.05,0.18],20:[0.42,0.3,0.15],21:[1.0,0.75,0.1],22:[1.0,0.5,0.0]};
-var TOOL_RGB={}; TOOL_RGB[STICK]=[0.55,0.35,0.15];
-var _tm={wood:[0.55,0.42,0.1],stone:[0.55,0.55,0.55],iron:[0.8,0.8,0.8],diamond:[0.3,0.85,0.9]};
+var TOOL_RGB={}; TOOL_RGB[STICK]=[0.55,0.35,0.15]; TOOL_RGB[LEATHER]=[0.55,0.35,0.15];
+var _tm={wood:[0.55,0.42,0.1],stone:[0.55,0.55,0.55],iron:[0.8,0.8,0.8],diamond:[0.3,0.85,0.9],netherite:[0.25,0.2,0.3],leather:[0.55,0.35,0.15]};
 [WOOD_PICK,WOOD_AXE,WOOD_SHOVEL].forEach(function(id){TOOL_RGB[id]=_tm.wood;});
 [STONE_PICK,STONE_AXE,STONE_SHOVEL].forEach(function(id){TOOL_RGB[id]=_tm.stone;});
 [IRON_PICK,IRON_AXE,IRON_SHOVEL].forEach(function(id){TOOL_RGB[id]=_tm.iron;});
 [DIAM_PICK,DIAM_AXE,DIAM_SHOVEL].forEach(function(id){TOOL_RGB[id]=_tm.diamond;});
-function getItemRGB(id){ return BLOCK_RGB[id]||TOOL_RGB[id]||[0.8,0.8,0.8]; }
+var ARMOR_RGB={};
+[LEATHER_HELM,LEATHER_CHEST,LEATHER_LEGS,LEATHER_BOOTS].forEach(function(id){ARMOR_RGB[id]=_tm.leather;});
+[IRON_HELM,IRON_CHEST,IRON_LEGS,IRON_BOOTS].forEach(function(id){ARMOR_RGB[id]=_tm.iron;});
+[DIAM_HELM,DIAM_CHEST,DIAM_LEGS,DIAM_BOOTS].forEach(function(id){ARMOR_RGB[id]=_tm.diamond;});
+[NETHERITE_HELM,NETHERITE_CHEST,NETHERITE_LEGS,NETHERITE_BOOTS].forEach(function(id){ARMOR_RGB[id]=_tm.netherite;});
+function getItemRGB(id){ return BLOCK_RGB[id]||TOOL_RGB[id]||ARMOR_RGB[id]||[0.8,0.8,0.8]; }
 function openInventory(){
   if(invOpen||!playing) return;
   invOpen=true;
@@ -1839,6 +1997,53 @@ function closeInventory(relock){
 function buildInvGrid(){
   var grid=document.getElementById('inv-grid');
   grid.innerHTML='';
+  // Armor slots row
+  var armorTypes=['helmet','chestplate','leggings','boots'];
+  var armorLabels=['Helmet','Chest','Legs','Boots'];
+  var armorDiv=document.createElement('div');
+  armorDiv.style.cssText='grid-column:1/-1;display:flex;gap:6px;justify-content:center;margin-bottom:8px;';
+  for(var ai=0;ai<4;ai++){
+    (function(ai){
+      var type=armorTypes[ai], label=armorLabels[ai];
+      var si=armorSlots[type];
+      var d=document.createElement('div'); d.className='slot';
+      d.style.cursor='pointer'; d.style.pointerEvents='auto';
+      d.style.width='48px'; d.style.height='48px';
+      if(si<0||inv[si].n<=0){ d.style.opacity='0.4'; d.style.border='2px dashed #666'; }
+      var cv=document.createElement('canvas'); cv.width=32; cv.height=32;
+      if(si>=0 && inv[si].n>0) drawBlockIcon(cv, inv[si].id);
+      var n=document.createElement('div'); n.className='n'; n.style.fontSize='8px';
+      n.textContent=si>=0&&inv[si].n>0?label:label;
+      d.appendChild(cv); d.appendChild(n);
+      if(si>=0 && inv[si].id && isArmor(inv[si].id)){
+        var maxDur=ARMOR[inv[si].id].dur;
+        var curDur=invDur[si];
+        var ratio=curDur/maxDur;
+        var bar=document.createElement('div'); bar.className='dur-bar';
+        var fill=document.createElement('div'); fill.className='dur-fill';
+        var rr=Math.round(255*(1-ratio)), gg=Math.round(255*ratio);
+        fill.style.width=Math.round(ratio*100)+'%';
+        fill.style.background='rgb('+rr+','+gg+',0)';
+        bar.appendChild(fill); d.appendChild(bar);
+      }
+      d.addEventListener('click', function(){
+        if(si>=0 && inv[si].n>0){ unequipArmor(type); buildInvGrid(); return; }
+        // Find first armor of this type in inventory
+        for(var s=9;s<36;s++){
+          if(inv[s].id && isArmor(inv[s].id) && ARMOR[inv[s].id].type===type){
+            equipArmor(s); buildInvGrid(); return;
+          }
+        }
+        for(var s=0;s<9;s++){
+          if(inv[s].id && isArmor(inv[s].id) && ARMOR[inv[s].id].type===type){
+            equipArmor(s); buildInvGrid(); return;
+          }
+        }
+      });
+      armorDiv.appendChild(d);
+    })(ai);
+  }
+  grid.appendChild(armorDiv);
   for(var i=0;i<36;i++){
     (function(i){
       var d=document.createElement('div'); d.className='slot'+(i===selIndex?' sel':'');
@@ -1848,8 +2053,8 @@ function buildInvGrid(){
       drawBlockIcon(cv, inv[i].id);
       var n=document.createElement('div'); n.className='n'; n.textContent=inv[i].n>0?(getItemName(inv[i].id)+(inv[i].n>1?' x'+inv[i].n:'')):'';
       d.appendChild(cv); d.appendChild(n);
-      if(isTool(inv[i].id) && TOOLS[inv[i].id].dur){
-        var maxDur=TOOLS[inv[i].id].dur;
+      if((isTool(inv[i].id) && TOOLS[inv[i].id] && TOOLS[inv[i].id].dur) || (isArmor(inv[i].id) && ARMOR[inv[i].id] && ARMOR[inv[i].id].dur)){
+        var maxDur=isTool(inv[i].id)?TOOLS[inv[i].id].dur:ARMOR[inv[i].id].dur;
         var curDur=invDur[i];
         var ratio=curDur/maxDur;
         var bar=document.createElement('div'); bar.className='dur-bar';
@@ -1860,11 +2065,19 @@ function buildInvGrid(){
         bar.appendChild(fill);
         d.appendChild(bar);
       }
-      d.addEventListener('click', function(){ if(inv[i].n>0) selectSlot(i%9); buildInvGrid(); });
+      d.addEventListener('click', function(){
+        if(inv[i].n>0 && isArmor(inv[i].id)){
+          var type=ARMOR[inv[i].id].type;
+          if(armorSlots[type]===i){ unequipArmor(type); }
+          else { equipArmor(i); }
+          buildInvGrid(); return;
+        }
+        if(inv[i].n>0) selectSlot(i%9); buildInvGrid();
+      });
       grid.appendChild(d);
     })(i);
   }
-  document.getElementById('inv-stats').textContent='Kills: '+kills+'  •  Health: '+Math.max(0,Math.round(health))+'  •  Hunger: '+Math.max(0,Math.round(hunger));
+  document.getElementById('inv-stats').textContent='Kills: '+kills+'  •  Health: '+Math.max(0,Math.round(health))+'  •  Hunger: '+Math.max(0,Math.round(hunger))+(getArmorProtection()>0?'  •  Armor: '+Math.round(getArmorProtection()*5)+'%':'');
 }
 function dropSelected(){
   if(dead||!playing) return;
@@ -1873,8 +2086,12 @@ function dropSelected(){
   var dir=lookDir(), o=eyePos();
   pickups.push({x:o[0]+dir[0]*1.2, y:o[1]+dir[1]*0.9, z:o[2]+dir[2]*1.2,
     vx:dir[0]*4, vy:3, vz:dir[2]*4, kind:name, nut:0, t:0,
-    col:getItemRGB(id), blockId:id, toolDur:isTool(id)?invDur[selIndex]:undefined});
+    col:getItemRGB(id), blockId:id, toolDur:(isTool(id)||isArmor(id))?invDur[selIndex]:undefined});
   if(pickups.length>60) pickups.shift();
+  // If dropping an equipped armor piece, unequip it
+  if(isArmor(id)){
+    for(var slot in armorSlots){ if(armorSlots[slot]===selIndex){ armorSlots[slot]=-1; break; } }
+  }
   invRemove(selIndex,1);
   tone(300,0.08,'square',0.15,200);
   showMsg('Dropped '+name);
@@ -1919,7 +2136,7 @@ function canCraft(recipe){
   return true;
 }
 function invRoomFor(id,n){
-  if(isTool(id)){ for(var i=0;i<36;i++) if(inv[i].n===0) return 1; return 0; }
+  if(isTool(id)||isArmor(id)){ for(var i=0;i<36;i++) if(inv[i].n===0) return 1; return 0; }
   var left=n;
   for(var i=0;i<36&&left>0;i++){
     if(inv[i].id===id && inv[i].n<SLOT_MAX) left-=SLOT_MAX-inv[i].n;
@@ -2016,6 +2233,7 @@ function updateDebug(){
   line += 'Chunks: '+chunks.size+' loaded  Mobs: '+mobs.length+'  Pickups: '+pickups.length+'\n';
   line += 'Health: '+(health<=6?'** ':'')+Math.max(0,Math.round(health))+'/20'+(health<=6?' **':'');
   line += '  Hunger: '+Math.max(0,Math.round(hunger))+'/20\n';
+  line += 'Armor: '+Math.round(getArmorProtection()*5)+'% reduction\n';
   line += 'Fly: '+(player.fly?'ON':'OFF')+'  Waypoints: '+waypoints.length+'\n';
   line += 'Seed: '+WORLD_SEED;
   el.textContent = line;
@@ -2206,6 +2424,19 @@ function drawBlockIcon(cv, id){
     g.strokeStyle='rgba(0,0,0,.5)'; g.strokeRect(0.5,0.5,31,31);
     return;
   }
+  if(isArmor(id)){
+    drawArmorIcon(g, id, 32);
+    g.strokeStyle='rgba(0,0,0,.5)'; g.strokeRect(0.5,0.5,31,31);
+    return;
+  }
+  if(id===LEATHER){
+    g.fillStyle='#8B5A2B';
+    g.fillRect(6,6,20,20);
+    g.fillStyle='#A0693A';
+    g.fillRect(8,8,16,16);
+    g.strokeStyle='rgba(0,0,0,.5)'; g.strokeRect(0.5,0.5,31,31);
+    return;
+  }
   var b=BLOCKS[id];
   var tileSide=b?b.side:3;
   g.drawImage(atlasCanvas, tileSide*16,0,16,16, 0,0,32,32);
@@ -2221,8 +2452,8 @@ function buildHotbar(){
       var k=document.createElement('div'); k.className='k'; k.textContent=(i+1);
       var n=document.createElement('div'); n.className='n'; n.textContent=inv[i].n>0?(getItemName(inv[i].id)+(inv[i].n>1?' x'+inv[i].n:'')):'Empty';
       d.appendChild(cv); d.appendChild(k); d.appendChild(n);
-      if(isTool(inv[i].id) && TOOLS[inv[i].id].dur){
-        var maxDur=TOOLS[inv[i].id].dur;
+      if((isTool(inv[i].id) && TOOLS[inv[i].id] && TOOLS[inv[i].id].dur) || (isArmor(inv[i].id) && ARMOR[inv[i].id] && ARMOR[inv[i].id].dur)){
+        var maxDur=isTool(inv[i].id)?TOOLS[inv[i].id].dur:ARMOR[inv[i].id].dur;
         var curDur=invDur[i];
         var ratio=curDur/maxDur;
         var bar=document.createElement('div'); bar.className='dur-bar';
@@ -2247,8 +2478,10 @@ function selectSlot(i){
 function updateSelectedLabel(){
   var label=getItemName(inv[selIndex].id)+' ['+(selIndex+1)+']';
   if(inv[selIndex].n>1) label+=' x'+inv[selIndex].n;
-  if(isTool(inv[selIndex].id) && TOOLS[inv[selIndex].id].dur){
+  if(isTool(inv[selIndex].id) && TOOLS[inv[selIndex].id] && TOOLS[inv[selIndex].id].dur){
     label+=' '+invDur[selIndex]+'/'+TOOLS[inv[selIndex].id].dur;
+  } else if(isArmor(inv[selIndex].id) && ARMOR[inv[selIndex].id] && ARMOR[inv[selIndex].id].dur){
+    label+=' '+invDur[selIndex]+'/'+ARMOR[inv[selIndex].id].dur;
   }
   document.getElementById('selected-label').textContent=label;
 }
@@ -2259,6 +2492,10 @@ function updateHand(){
   g.clearRect(0,0,16,16);
   if(isTool(id)){
     drawToolIcon(g, id, 16);
+  } else if(isArmor(id)){
+    drawArmorIcon(g, id, 16);
+  } else if(id===LEATHER){
+    g.fillStyle='#8B5A2B'; g.fillRect(2,2,12,12);
   } else {
     var b=BLOCKS[id];
     if(b) g.drawImage(atlasCanvas, b.side*16,0,16,16, 0,0,16,16);
@@ -2269,11 +2506,16 @@ function swingHand(){
   h.classList.add('swing'); setTimeout(function(){h.classList.remove('swing');},120);
 }
 function updateBars(){
-  var hh=document.getElementById('health'), hu=document.getElementById('hunger');
+  var hh=document.getElementById('health'), hu=document.getElementById('hunger'), ha=document.getElementById('armor');
   var s=''; for(var i=0;i<10;i++) s+= (health>i*2)?'♥':'♡';
   hh.textContent=s;
   var t=''; for(var j=0;j<10;j++) t+=(hunger>j*2)?'●':'○';
   hu.textContent=t;
+  var ap=getArmorProtection();
+  var armorHP=Math.round(ap/2);
+  var a=''; for(var k=0;k<10;k++) a+=(armorHP>k)?'\u25CF':'\u25CB';
+  ha.textContent=ap>0?a:'';
+  ha.style.color='#BBBBBB';
   hh.style.opacity=(health<=6)?(0.6+0.4*Math.sin(performance.now()/150)) : 1;
 }
 
