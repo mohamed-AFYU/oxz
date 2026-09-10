@@ -282,18 +282,23 @@ var ITEMS = {
   'Gold Nugget': {name:'Gold Nugget', color:[0.96,0.84,0.26],maxStack:64, food:0},
   'Iron Ingot':  {name:'Iron Ingot',  color:[0.85,0.85,0.85],maxStack:64, food:0},
   'Diamond':     {name:'Diamond',     color:[0.43,0.95,0.95],maxStack:64, food:0},
-  'Wooden Pickaxe':  {name:'Wooden Pickaxe',  color:[0.65,0.49,0.23],maxStack:1, tool:'pickaxe', tier:1, food:0, maxDurability:60},
-  'Stone Pickaxe':   {name:'Stone Pickaxe',   color:[0.55,0.55,0.55],maxStack:1, tool:'pickaxe', tier:2, food:0, maxDurability:132},
-  'Iron Pickaxe':    {name:'Iron Pickaxe',    color:[0.85,0.85,0.85],maxStack:1, tool:'pickaxe', tier:3, food:0, maxDurability:251},
-  'Diamond Pickaxe': {name:'Diamond Pickaxe', color:[0.43,0.95,0.95],maxStack:1, tool:'pickaxe', tier:4, food:0, maxDurability:1562},
-  'Wooden Axe':      {name:'Wooden Axe',      color:[0.65,0.49,0.23],maxStack:1, tool:'axe', tier:1, food:0, maxDurability:60},
-  'Stone Axe':       {name:'Stone Axe',       color:[0.55,0.55,0.55],maxStack:1, tool:'axe', tier:2, food:0, maxDurability:132},
-  'Iron Axe':        {name:'Iron Axe',        color:[0.85,0.85,0.85],maxStack:1, tool:'axe', tier:3, food:0, maxDurability:251},
-  'Diamond Axe':     {name:'Diamond Axe',     color:[0.43,0.95,0.95],maxStack:1, tool:'axe', tier:4, food:0, maxDurability:1562},
-  'Wooden Shovel':   {name:'Wooden Shovel',   color:[0.65,0.49,0.23],maxStack:1, tool:'shovel', tier:1, food:0, maxDurability:60},
-  'Stone Shovel':    {name:'Stone Shovel',    color:[0.55,0.55,0.55],maxStack:1, tool:'shovel', tier:2, food:0, maxDurability:132},
-  'Iron Shovel':     {name:'Iron Shovel',     color:[0.85,0.85,0.85],maxStack:1, tool:'shovel', tier:3, food:0, maxDurability:251},
-  'Diamond Shovel':  {name:'Diamond Shovel',  color:[0.43,0.95,0.95],maxStack:1, tool:'shovel', tier:4, food:0, maxDurability:1562},
+  'Wooden Pickaxe':  {name:'Wooden Pickaxe',  color:[0.65,0.49,0.23],maxStack:1, tool:'pickaxe', tier:1, food:0, maxDurability:60, damage:2},
+  'Stone Pickaxe':   {name:'Stone Pickaxe',   color:[0.55,0.55,0.55],maxStack:1, tool:'pickaxe', tier:2, food:0, maxDurability:132, damage:2},
+  'Iron Pickaxe':    {name:'Iron Pickaxe',    color:[0.85,0.85,0.85],maxStack:1, tool:'pickaxe', tier:3, food:0, maxDurability:251, damage:2},
+  'Diamond Pickaxe': {name:'Diamond Pickaxe', color:[0.43,0.95,0.95],maxStack:1, tool:'pickaxe', tier:4, food:0, maxDurability:1562, damage:2},
+  'Wooden Axe':      {name:'Wooden Axe',      color:[0.65,0.49,0.23],maxStack:1, tool:'axe', tier:1, food:0, maxDurability:60, damage:3},
+  'Stone Axe':       {name:'Stone Axe',       color:[0.55,0.55,0.55],maxStack:1, tool:'axe', tier:2, food:0, maxDurability:132, damage:3},
+  'Iron Axe':        {name:'Iron Axe',        color:[0.85,0.85,0.85],maxStack:1, tool:'axe', tier:3, food:0, maxDurability:251, damage:3},
+  'Diamond Axe':     {name:'Diamond Axe',     color:[0.43,0.95,0.95],maxStack:1, tool:'axe', tier:4, food:0, maxDurability:1562, damage:3},
+  'Wooden Shovel':   {name:'Wooden Shovel',   color:[0.65,0.49,0.23],maxStack:1, tool:'shovel', tier:1, food:0, maxDurability:60, damage:2},
+  'Stone Shovel':    {name:'Stone Shovel',    color:[0.55,0.55,0.55],maxStack:1, tool:'shovel', tier:2, food:0, maxDurability:132, damage:2},
+  'Iron Shovel':     {name:'Iron Shovel',     color:[0.85,0.85,0.85],maxStack:1, tool:'shovel', tier:3, food:0, maxDurability:251, damage:2},
+  'Diamond Shovel':  {name:'Diamond Shovel',  color:[0.43,0.95,0.95],maxStack:1, tool:'shovel', tier:4, food:0, maxDurability:1562, damage:2},
+  // Swords
+  'Wooden Sword':    {name:'Wooden Sword',    color:[0.65,0.49,0.23],maxStack:1, tool:'sword', tier:1, food:0, maxDurability:60, damage:4},
+  'Stone Sword':     {name:'Stone Sword',     color:[0.55,0.55,0.55],maxStack:1, tool:'sword', tier:2, food:0, maxDurability:132, damage:5},
+  'Iron Sword':      {name:'Iron Sword',      color:[0.85,0.85,0.85],maxStack:1, tool:'sword', tier:3, food:0, maxDurability:251, damage:6},
+  'Diamond Sword':   {name:'Diamond Sword',   color:[0.43,0.95,0.95],maxStack:1, tool:'sword', tier:4, food:0, maxDurability:1562, damage:7},
   // Armor - Iron
   'Iron Helmet':      {name:'Iron Helmet',      color:[0.85,0.85,0.85],maxStack:1, armor:2, armorType:'helmet', food:0},
   'Iron Chestplate':  {name:'Iron Chestplate',  color:[0.85,0.85,0.85],maxStack:1, armor:6, armorType:'chestplate', food:0},
@@ -410,6 +415,14 @@ function useToolDurability() {
   }
   inv.dirty = true;
   buildHotbar();
+}
+
+function getWeaponDamage() {
+  var slot = inv.slots[selIndex];
+  if (!slot || slot.type !== 'item') return 1; // bare hand
+  var it = ITEMS[slot.id];
+  if (!it) return 1;
+  return it.damage || 1;
 }
 
 function slotsMatch(a, b) {
@@ -534,6 +547,22 @@ function checkCrafting() {
   // Diamond Shovel: [ ][Diamond] / [ ][Stick]
   if(isEmpty(0) && isItem(1,'Diamond') && isEmpty(2) && isItem(3,'Stick')){
     inv.craft[4] = makeSlot('item', 'Diamond Shovel', 1); return;
+  }
+  // Wooden Sword: [Plank][Plank] / [Stick][ ]
+  if(isBlock(0,PLANK) && isBlock(1,PLANK) && isItem(2,'Stick') && isEmpty(3)){
+    inv.craft[4] = makeSlot('item', 'Wooden Sword', 1); return;
+  }
+  // Stone Sword: [Stone][Stone] / [Stick][ ]
+  if(isBlock(0,STONE) && isBlock(1,STONE) && isItem(2,'Stick') && isEmpty(3)){
+    inv.craft[4] = makeSlot('item', 'Stone Sword', 1); return;
+  }
+  // Iron Sword: [Iron Ingot][Iron Ingot] / [Stick][ ]
+  if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Stick') && isEmpty(3)){
+    inv.craft[4] = makeSlot('item', 'Iron Sword', 1); return;
+  }
+  // Diamond Sword: [Diamond][Diamond] / [Stick][ ]
+  if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Stick') && isEmpty(3)){
+    inv.craft[4] = makeSlot('item', 'Diamond Sword', 1); return;
   }
   // Iron Helmet: [Iron][Iron] / [Iron][ ]
   if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Iron Ingot') && isEmpty(3)){
@@ -1024,6 +1053,7 @@ function showInvTooltip(slot, e) {
     if (it && it.food > 0) info = 'Food: +' + it.food;
     if (it && it.tool) info = (info ? info + ' \u2022 ' : '') + 'Tool: ' + it.tool + ' (tier ' + it.tier + ')';
     if (it && it.armor) info = (info ? info + ' \u2022 ' : '') + 'Armor: +' + it.armor + ' (' + it.armorType + ')';
+    if (it && it.damage && it.damage > 1) info = (info ? info + ' \u2022 ' : '') + 'Damage: ' + it.damage;
   }
   if (slot.type === 'block') {
     var bl = BLOCKS[slot.id];
@@ -2243,7 +2273,7 @@ function attackMobs(){
     if(dd<d.hw+0.9 && t<bestT){ bestT=t; best=m; }
   }
   if(best){
-    hurtMob(best, 6, best.x-player.x, best.z-player.z);
+    hurtMob(best, getWeaponDamage(), best.x-player.x, best.z-player.z);
     swingHand(); hitMark();
     useToolDurability();
     return true;
