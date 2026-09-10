@@ -202,8 +202,7 @@ HARDNESS[GLASS]=0.2; HARDNESS[LEAF]=0.25;
 HARDNESS[STONE]=1.5; HARDNESS[BRICK]=2.0;
 HARDNESS[COAL]=2.0; HARDNESS[IRON]=2.5; HARDNESS[GOLD]=3.0; HARDNESS[DIAM]=3.5;
 HARDNESS[NETHERRACK]=1.0; HARDNESS[GLOWSTONE]=0.5;
-HARDNESS[LAVA]=0.0;
-HARDNESS[OBSIDIAN]=-1; HARDNESS[NPORTAL]=-1;
+HARDNESS[OBSIDIAN]=-1; HARDNESS[NPORTAL]=-1; HARDNESS[LAVA]=-1;
 // Block drop table: block id -> [{id, n}] (n = count, or {min, max} for range)
 var DROPS={};
 DROPS[GRASS]=[{id:DIRT,n:1}]; DROPS[DIRT]=[{id:DIRT,n:1}]; DROPS[STONE]=[{id:STONE,n:1}];
@@ -259,12 +258,33 @@ for(var ii=0;ii<36;ii++) inv.push({id:AIR,n:0});
 var invDur=[];
 for(var ii=0;ii<36;ii++) invDur.push(0);
 var SLOT_MAX=64;
+function saveInv(){
+  try{
+    var data=[];
+    for(var i=0;i<36;i++) data.push({id:inv[i].id,n:inv[i].n,dur:invDur[i]});
+    localStorage.setItem('vc_inventory',JSON.stringify(data));
+  }catch(e){}
+}
+function loadInv(){
+  try{
+    var raw=localStorage.getItem('vc_inventory');
+    if(!raw) return false;
+    var data=JSON.parse(raw);
+    if(!data||data.length!==36) return false;
+    for(var i=0;i<36;i++){
+      if(data[i]&&typeof data[i].id==='number'){
+        inv[i].id=data[i].id; inv[i].n=data[i].n||0; invDur[i]=data[i].dur||0;
+      }
+    }
+    return true;
+  }catch(e){ return false; }
+}
 function invCount(slotId){ return inv[slotId]?inv[slotId].n:0; }
-function invAdd(id,n){
+function invAdd(id,n,dur){
   if(id===AIR||n<=0) return 0;
   if(isTool(id)){
     for(var i=0;i<36;i++){
-      if(inv[i].n===0){ inv[i].id=id; inv[i].n=1; invDur[i]=TOOLS[id].dur; return 1; }
+      if(inv[i].n===0){ inv[i].id=id; inv[i].n=1; invDur[i]=dur!=null?dur:TOOLS[id].dur; return 1; }
     }
     return 0;
   }
@@ -286,9 +306,9 @@ function invAdd(id,n){
   return n-left; // how many were actually added
 }
 function invRemove(slotId,n){
-  if(!inv[slotId]) return false;
   inv[slotId].n-=n;
   if(inv[slotId].n<=0){ inv[slotId].id=AIR; inv[slotId].n=0; invDur[slotId]=0; }
+  saveInv();
   return true;
 }
 function damageTool(slotId){
@@ -298,13 +318,16 @@ function damageTool(slotId){
     inv[slotId].id=AIR; inv[slotId].n=0; invDur[slotId]=0;
     sfxBreak(); showMsg('Tool broke!');
     buildHotbar(); updateHand();
+    saveInv();
     return true;
   }
   return false;
 }
 // Initialize hotbar with starting blocks (64 each)
 var START_ITEMS=[GRASS,DIRT,STONE,LOG,LEAF,SAND,PLANK,GLASS,BRICK];
-for(var si=0;si<9;si++){ inv[si].id=START_ITEMS[si]; inv[si].n=64; }
+if(!loadInv()){
+  for(var si=0;si<9;si++){ inv[si].id=START_ITEMS[si]; inv[si].n=64; }
+}
 var BLOCKS = {
   1:{name:'Grass', top:0, side:1, bottom:2},
   2:{name:'Dirt', top:2, side:2, bottom:2},
@@ -1156,8 +1179,9 @@ function doBreak(){
   if(miningTarget!==key){
     miningTarget=key;
     miningProgress=0;
+    miningTool=inv[selIndex].id;
     var baseH=HARDNESS[id]||1.0;
-    var mult=getMiningMultiplier(inv[selIndex].id, id);
+    var mult=getMiningMultiplier(miningTool, id);
     miningHardness=baseH/mult;
   }
 }
@@ -1377,10 +1401,11 @@ function updateMobs(dt){
     if(pd2<1.1*1.1 && it.t>0.6){
       sfxPop();
       if(it.blockId && it.blockId!==AIR){
-        var added=invAdd(it.blockId, it.blockCount||1);
+        var added=invAdd(it.blockId, it.blockCount||1, it.toolDur);
         if(added>0){
           showMsg('Picked up '+it.kind+(added>1?' x'+added:''));
           buildHotbar(); updateHand();
+          saveInv();
           pickups.splice(p,1);
         } else {
           showMsg('Inventory full!');
@@ -1704,7 +1729,7 @@ function typingTarget(e){
   var tn=t.tagName.toUpperCase();
   return tn==='INPUT'||tn==='TEXTAREA'||tn==='SELECT'||t.isContentEditable===true;
 }
-function clearKeys(){ keys={}; breakHeld=false; breakTimer=0; miningTarget=null; miningProgress=0; mineTickTimer=0; }
+function clearKeys(){ keys={}; breakHeld=false; breakTimer=0; miningTarget=null; miningProgress=0; mineTickTimer=0; miningTool=AIR; }
 window.addEventListener('blur', clearKeys);
 document.addEventListener('visibilitychange', function(){ if(document.hidden) clearKeys(); });
 document.addEventListener('keydown', function(e){
@@ -1717,6 +1742,8 @@ document.addEventListener('keydown', function(e){
   if(e.code==='F3'){ e.preventDefault(); toggleDebug(); return; }
   if(e.code==='Tab'){ e.preventDefault(); toggleMinimap(); return; }
   if(invOpen||craftOpen){
+    if(e.code==='KeyE' && invOpen){ closeInventory(true); return; }
+    if(e.code==='KeyC' && craftOpen){ closeCrafting(true); return; }
     if(e.code.indexOf('Digit')===0){
       var nd=parseInt(e.code.slice(5),10);
       if(nd>=1&&nd<=9) selectSlot(nd-1);
@@ -1766,7 +1793,7 @@ document.addEventListener('wheel', function(e){
   selectSlot((selIndex+(e.deltaY>0?1:8))%9);
 }, {passive:true});
 var breakHeld=false, breakTimer=0;
-var miningTarget=null, miningProgress=0, miningHardness=0, mineTickTimer=0;
+var miningTarget=null, miningProgress=0, miningHardness=0, mineTickTimer=0, miningTool=AIR;
 function lockPointer(){ try{ canvas.requestPointerLock && canvas.requestPointerLock(); }catch(e){} }
 // Pointer lock is only ever requested from explicit player clicks (Play /
 // Resume / Done). Escape always releases it natively via the browser.
@@ -1846,7 +1873,7 @@ function dropSelected(){
   var dir=lookDir(), o=eyePos();
   pickups.push({x:o[0]+dir[0]*1.2, y:o[1]+dir[1]*0.9, z:o[2]+dir[2]*1.2,
     vx:dir[0]*4, vy:3, vz:dir[2]*4, kind:name, nut:0, t:0,
-    col:getItemRGB(id), blockId:id});
+    col:getItemRGB(id), blockId:id, toolDur:isTool(id)?invDur[selIndex]:undefined});
   if(pickups.length>60) pickups.shift();
   invRemove(selIndex,1);
   tone(300,0.08,'square',0.15,200);
@@ -1891,8 +1918,20 @@ function canCraft(recipe){
   }
   return true;
 }
+function invRoomFor(id,n){
+  if(isTool(id)){ for(var i=0;i<36;i++) if(inv[i].n===0) return 1; return 0; }
+  var left=n;
+  for(var i=0;i<36&&left>0;i++){
+    if(inv[i].id===id && inv[i].n<SLOT_MAX) left-=SLOT_MAX-inv[i].n;
+  }
+  for(var i=0;i<36&&left>0;i++){
+    if(inv[i].n===0) left-=SLOT_MAX;
+  }
+  return n-Math.max(0,left);
+}
 function doCraft(recipe){
   if(!canCraft(recipe)) return;
+  if(invRoomFor(recipe.result.id,recipe.result.n)<recipe.result.n){ showMsg('No room for result!'); return; }
   for(var i=0;i<recipe.ing.length;i++){
     var need=recipe.ing[i], left=need.n;
     for(var s=0;s<36&&left>0;s++){
@@ -2306,6 +2345,14 @@ function loop(){
           if(hit){
             var key=hit.x+','+hit.y+','+hit.z;
             if(miningTarget!==key){ doBreak(); mineTickTimer=0; }
+            // Recalculate hardness if tool changed mid-mine
+            if(miningTarget&&miningTool!==inv[selIndex].id){
+              miningTool=inv[selIndex].id;
+              var baseH=HARDNESS[hit.id]||1.0;
+              var mult=getMiningMultiplier(miningTool, hit.id);
+              miningHardness=baseH/mult;
+              miningProgress=0;
+            }
             if(miningHardness>0){
               miningProgress+=dt;
               mineTickTimer+=dt;
@@ -2322,7 +2369,7 @@ function loop(){
               spawnBlockDrops(hit.x,hit.y,hit.z,hit.id);
               setBlock(hit.x,hit.y,hit.z,AIR);
               sfxBreak(); swingHand();
-              damageTool(selIndex);
+              if(isTool(inv[selIndex].id)) damageTool(selIndex);
               miningTarget=null; miningProgress=0;
             }
           }
