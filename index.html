@@ -125,6 +125,10 @@
   </div>
   <div id="hotbar"></div>
 </div>
+<div id="break-progress" style="position:absolute;bottom:80px;left:50%;transform:translateX(-50%);width:120px;height:6px;background:rgba(0,0,0,.6);border-radius:3px;z-index:15;display:none;pointer-events:none;">
+  <div id="break-progress-fill" style="height:100%;width:0%;background:linear-gradient(90deg,#4a4,#6c6);border-radius:3px;transition:none;"></div>
+</div>
+<div id="tool-durability" style="position:absolute;bottom:80px;right:20px;background:rgba(0,0,0,.55);color:#ccc;padding:4px 8px;border-radius:4px;font:11px/1.3 monospace;z-index:15;display:none;pointer-events:none;"></div>
 <div id="crosshair"></div>
 <div id="hand"><div id="hand-inner"><div id="hand-arm"></div><canvas id="hand-block" width="16" height="16"></canvas></div></div>
 <div id="msg"></div>
@@ -149,7 +153,7 @@
     <div style="font-size:15px;color:#cfc;">Explore infinite biomes, mine ores in caves, fight mobs at night. The world generates around you forever.</div>
     <div class="controls">
       <div><b>W A S D</b> Move &nbsp; <b>Mouse</b> Look &nbsp; <b>Space</b> Jump / Swim</div>
-      <div><b>Left Click</b> Attack / Break &nbsp; <b>Right Click</b> Place block &nbsp; <b>Middle Click</b> Pick block</div>
+      <div><b>Left Click (hold)</b> Break block (progressive) &nbsp; <b>Right Click</b> Place block &nbsp; <b>Middle Click</b> Pick block</div>
       <div><b>1 &ndash; 9</b> Hotbar &nbsp; <b>Wheel</b> Cycle &nbsp; <b>E</b> Inventory &nbsp; <b>Q</b> Drop item</div>
       <div><b>F</b> Fly &nbsp; <b>R</b> Morning &nbsp; <b>Shift</b> Sprint &nbsp; <b>Esc</b> Pause</div>
       <div style="color:#ffe27a;margin-top:6px;">--- Navigation ---</div>
@@ -167,7 +171,7 @@
   <div class="panel">
     <div class="controls">
       <div><b>WASD / Mouse</b> Move &amp; look</div>
-      <div><b>Left / Right click</b> Attack-Break / Place</div>
+      <div><b>Left click (hold)</b> Attack / Progressive break &nbsp; <b>Right click</b> Place</div>
       <div><b>Middle Click</b> Pick block &nbsp; <b>1-9 / Wheel</b> Hotbar</div>
       <div><b>E</b> Inventory &nbsp; <b>Q</b> Drop &nbsp; <b>F</b> Fly &nbsp; <b>R</b> Morning</div>
       <div style="color:#ffe27a;margin-top:6px;">--- Navigation ---</div>
@@ -257,6 +261,61 @@ var BLOCKS = {
 var HOTBAR = [GRASS,DIRT,STONE,LOG,LEAF,SAND,PLANK,GLASS,BRICK];
 var selIndex = 0;
 
+// ---------- Block hardness (seconds to break with fist) ----------
+var BLOCK_HARDNESS = {};
+BLOCK_HARDNESS[AIR] = 0;
+BLOCK_HARDNESS[GRASS] = 0.6;
+BLOCK_HARDNESS[DIRT] = 0.5;
+BLOCK_HARDNESS[STONE] = 1.5;
+BLOCK_HARDNESS[LOG] = 2.0;
+BLOCK_HARDNESS[LEAF] = 0.2;
+BLOCK_HARDNESS[SAND] = 0.5;
+BLOCK_HARDNESS[PLANK] = 2.0;
+BLOCK_HARDNESS[GLASS] = 0.3;
+BLOCK_HARDNESS[BRICK] = 2.0;
+BLOCK_HARDNESS[WATER] = -1;
+BLOCK_HARDNESS[COAL] = 3.0;
+BLOCK_HARDNESS[IRON] = 4.0;
+BLOCK_HARDNESS[GOLD] = 3.0;
+BLOCK_HARDNESS[DIAM] = 5.0;
+BLOCK_HARDNESS[SNOWG] = 0.2;
+BLOCK_HARDNESS[CACTUS] = 0.4;
+BLOCK_HARDNESS[NETHERRACK] = 0.4;
+BLOCK_HARDNESS[NPORTAL] = -1;
+BLOCK_HARDNESS[OBSIDIAN] = 50.0;
+BLOCK_HARDNESS[SOULSAND] = 1.0;
+BLOCK_HARDNESS[GLOWSTONE] = 0.3;
+BLOCK_HARDNESS[LAVA] = -1;
+
+// ---------- Tool categories: 'none', 'pickaxe', 'axe', 'shovel', 'sword' ----------
+var TOOL_TYPES = {none:0, pickaxe:1, axe:2, shovel:3, sword:4};
+
+// Optimal tool per block (0=any, 1=pickaxe, 2=axe, 3=shovel, 4=sword)
+var BLOCK_OPTIMAL_TOOL = {};
+BLOCK_OPTIMAL_TOOL[GRASS] = 3;
+BLOCK_OPTIMAL_TOOL[DIRT] = 3;
+BLOCK_OPTIMAL_TOOL[SAND] = 3;
+BLOCK_OPTIMAL_TOOL[SNOWG] = 3;
+BLOCK_OPTIMAL_TOOL[SOULSAND] = 3;
+BLOCK_OPTIMAL_TOOL[LOG] = 2;
+BLOCK_OPTIMAL_TOOL[PLANK] = 2;
+BLOCK_OPTIMAL_TOOL[LEAF] = 0;
+BLOCK_OPTIMAL_TOOL[STONE] = 1;
+BLOCK_OPTIMAL_TOOL[COAL] = 1;
+BLOCK_OPTIMAL_TOOL[IRON] = 1;
+BLOCK_OPTIMAL_TOOL[GOLD] = 1;
+BLOCK_OPTIMAL_TOOL[DIAM] = 1;
+BLOCK_OPTIMAL_TOOL[BRICK] = 1;
+BLOCK_OPTIMAL_TOOL[GLASS] = 0;
+BLOCK_OPTIMAL_TOOL[CACTUS] = 0;
+BLOCK_OPTIMAL_TOOL[NETHERRACK] = 0;
+BLOCK_OPTIMAL_TOOL[GLOWSTONE] = 0;
+
+// Tool efficiency multipliers by material tier: wood=1, stone=2, iron=3, gold=2, diamond=4
+// Fist is tier 0 (multiplier 1)
+var TOOL_EFFICIENCY = {0:1, 1:2, 2:3, 3:2, 4:4};
+var TOOL_TIER_NAMES = ['Wooden','Stone','Iron','Golden','Diamond'];
+
 // ---------- Item definitions (non-block items) ----------
 var ITEMS = {
   'Porkchop':    {name:'Porkchop',    color:[1,0.55,0.6],  maxStack:64, food:5, edible:true},
@@ -269,6 +328,27 @@ var ITEMS = {
   'Gunpowder':   {name:'Gunpowder',   color:[0.3,0.3,0.3], maxStack:64, food:0, edible:false},
   'Stick':       {name:'Stick',       color:[0.55,0.4,0.22],maxStack:64, food:0, edible:false},
   'Torch':       {name:'Torch',       color:[1,0.85,0.3],  maxStack:64, food:0, edible:false},
+  // Tools: {toolType, tier, durability, damage}
+  'Wood Pickaxe':  {name:'Wood Pickaxe',  color:[0.55,0.35,0.15], maxStack:1, food:0, edible:false, toolType:'pickaxe', tier:0, durability:60, damage:2},
+  'Stone Pickaxe': {name:'Stone Pickaxe', color:[0.55,0.55,0.55], maxStack:1, food:0, edible:false, toolType:'pickaxe', tier:1, durability:132, damage:3},
+  'Iron Pickaxe':  {name:'Iron Pickaxe',  color:[0.85,0.85,0.85], maxStack:1, food:0, edible:false, toolType:'pickaxe', tier:2, durability:251, damage:4},
+  'Gold Pickaxe':  {name:'Gold Pickaxe',  color:[0.96,0.84,0.26], maxStack:1, food:0, edible:false, toolType:'pickaxe', tier:3, durability:33, damage:2},
+  'Diamond Pickaxe':{name:'Diamond Pickaxe',color:[0.43,0.95,0.95],maxStack:1, food:0, edible:false, toolType:'pickaxe', tier:4, durability:1562, damage:5},
+  'Wood Axe':    {name:'Wood Axe',    color:[0.55,0.35,0.15], maxStack:1, food:0, edible:false, toolType:'axe', tier:0, durability:60, damage:3},
+  'Stone Axe':   {name:'Stone Axe',   color:[0.55,0.55,0.55], maxStack:1, food:0, edible:false, toolType:'axe', tier:1, durability:132, damage:4},
+  'Iron Axe':    {name:'Iron Axe',    color:[0.85,0.85,0.85], maxStack:1, food:0, edible:false, toolType:'axe', tier:2, durability:251, damage:5},
+  'Gold Axe':    {name:'Gold Axe',    color:[0.96,0.84,0.26], maxStack:1, food:0, edible:false, toolType:'axe', tier:3, durability:33, damage:3},
+  'Diamond Axe': {name:'Diamond Axe', color:[0.43,0.95,0.95], maxStack:1, food:0, edible:false, toolType:'axe', tier:4, durability:1562, damage:6},
+  'Wood Shovel': {name:'Wood Shovel', color:[0.55,0.35,0.15], maxStack:1, food:0, edible:false, toolType:'shovel', tier:0, durability:60, damage:1},
+  'Stone Shovel':{name:'Stone Shovel',color:[0.55,0.55,0.55], maxStack:1, food:0, edible:false, toolType:'shovel', tier:1, durability:132, damage:2},
+  'Iron Shovel': {name:'Iron Shovel', color:[0.85,0.85,0.85], maxStack:1, food:0, edible:false, toolType:'shovel', tier:2, durability:251, damage:3},
+  'Gold Shovel': {name:'Gold Shovel', color:[0.96,0.84,0.26], maxStack:1, food:0, edible:false, toolType:'shovel', tier:3, durability:33, damage:1},
+  'Diamond Shovel':{name:'Diamond Shovel',color:[0.43,0.95,0.95],maxStack:1, food:0, edible:false, toolType:'shovel', tier:4, durability:1562, damage:4},
+  'Wood Sword':  {name:'Wood Sword',  color:[0.55,0.35,0.15], maxStack:1, food:0, edible:false, toolType:'sword', tier:0, durability:60, damage:4},
+  'Stone Sword': {name:'Stone Sword', color:[0.55,0.55,0.55], maxStack:1, food:0, edible:false, toolType:'sword', tier:1, durability:132, damage:5},
+  'Iron Sword':  {name:'Iron Sword',  color:[0.85,0.85,0.85], maxStack:1, food:0, edible:false, toolType:'sword', tier:2, durability:251, damage:6},
+  'Gold Sword':  {name:'Gold Sword',  color:[0.96,0.84,0.26], maxStack:1, food:0, edible:false, toolType:'sword', tier:3, durability:33, damage:4},
+  'Diamond Sword':{name:'Diamond Sword',color:[0.43,0.95,0.95],maxStack:1, food:0, edible:false, toolType:'sword', tier:4, durability:1562, damage:7},
 };
 
 // ---------- Crafting recipes ----------
@@ -276,6 +356,27 @@ var RECIPES = [
   {in:[{type:'block',id:LOG,count:1}], out:{type:'block',id:PLANK,count:4}},
   {in:[{type:'block',id:PLANK,count:2}], out:{type:'item',id:'Stick',count:4}},
   {in:[{type:'block',id:PLANK,count:1},{type:'block',id:COAL,count:1}], out:{type:'item',id:'Torch',count:4}},
+  // Tools (stick + material)
+  {in:[{type:'item',id:'Stick',count:1},{type:'block',id:PLANK,count:3}], out:{type:'item',id:'Wood Pickaxe',count:1}},
+  {in:[{type:'item',id:'Stick',count:1},{type:'block',id:STONE,count:3}], out:{type:'item',id:'Stone Pickaxe',count:1}},
+  {in:[{type:'item',id:'Stick',count:1},{type:'block',id:IRON,count:3}], out:{type:'item',id:'Iron Pickaxe',count:1}},
+  {in:[{type:'item',id:'Stick',count:1},{type:'block',id:GOLD,count:3}], out:{type:'item',id:'Gold Pickaxe',count:1}},
+  {in:[{type:'item',id:'Stick',count:1},{type:'block',id:DIAM,count:3}], out:{type:'item',id:'Diamond Pickaxe',count:1}},
+  {in:[{type:'item',id:'Stick',count:2},{type:'block',id:PLANK,count:3}], out:{type:'item',id:'Wood Axe',count:1}},
+  {in:[{type:'item',id:'Stick',count:2},{type:'block',id:STONE,count:3}], out:{type:'item',id:'Stone Axe',count:1}},
+  {in:[{type:'item',id:'Stick',count:2},{type:'block',id:IRON,count:3}], out:{type:'item',id:'Iron Axe',count:1}},
+  {in:[{type:'item',id:'Stick',count:2},{type:'block',id:GOLD,count:3}], out:{type:'item',id:'Gold Axe',count:1}},
+  {in:[{type:'item',id:'Stick',count:2},{type:'block',id:DIAM,count:3}], out:{type:'item',id:'Diamond Axe',count:1}},
+  {in:[{type:'item',id:'Stick',count:2},{type:'block',id:PLANK,count:1}], out:{type:'item',id:'Wood Shovel',count:1}},
+  {in:[{type:'item',id:'Stick',count:2},{type:'block',id:STONE,count:1}], out:{type:'item',id:'Stone Shovel',count:1}},
+  {in:[{type:'item',id:'Stick',count:2},{type:'block',id:IRON,count:1}], out:{type:'item',id:'Iron Shovel',count:1}},
+  {in:[{type:'item',id:'Stick',count:2},{type:'block',id:GOLD,count:1}], out:{type:'item',id:'Gold Shovel',count:1}},
+  {in:[{type:'item',id:'Stick',count:2},{type:'block',id:DIAM,count:1}], out:{type:'item',id:'Diamond Shovel',count:1}},
+  {in:[{type:'item',id:'Stick',count:1},{type:'block',id:PLANK,count:2}], out:{type:'item',id:'Wood Sword',count:1}},
+  {in:[{type:'item',id:'Stick',count:1},{type:'block',id:STONE,count:2}], out:{type:'item',id:'Stone Sword',count:1}},
+  {in:[{type:'item',id:'Stick',count:1},{type:'block',id:IRON,count:2}], out:{type:'item',id:'Iron Sword',count:1}},
+  {in:[{type:'item',id:'Stick',count:1},{type:'block',id:GOLD,count:2}], out:{type:'item',id:'Gold Sword',count:1}},
+  {in:[{type:'item',id:'Stick',count:1},{type:'block',id:DIAM,count:2}], out:{type:'item',id:'Diamond Sword',count:1}},
 ];
 // Also allow any LOG type -> planks
 // Handled in checkCrafting with special logic
@@ -502,6 +603,147 @@ function loadInv() {
   return false;
 }
 
+// ---------- Tool helper functions ----------
+function getToolInfo(slot) {
+  if (!slot || slot.type !== 'item') return null;
+  var it = ITEMS[slot.id];
+  if (!it || !it.toolType) return null;
+  return it;
+}
+
+function currentToolInfo() {
+  var slot = inv.slots[selIndex];
+  return getToolInfo(slot);
+}
+
+function getToolDurability(slot) {
+  var info = getToolInfo(slot);
+  return info ? info.durability : -1;
+}
+
+function getToolCurrentDurability(slot) {
+  if (!slot || slot.type !== 'item') return -1;
+  return slot.durabilityLeft !== undefined ? slot.durabilityLeft : (ITEMS[slot.id] ? ITEMS[slot.id].durability : -1);
+}
+
+function consumeToolDurability(slot) {
+  if (!slot || slot.type !== 'item') return;
+  var info = getToolInfo(slot);
+  if (!info) return;
+  if (slot.durabilityLeft === undefined) slot.durabilityLeft = info.durability;
+  slot.durabilityLeft--;
+  if (slot.durabilityLeft <= 0) {
+    inv.slots[selIndex] = null;
+    syncInvToHotbar();
+    buildHotbar();
+    updateHand();
+    sfxToolBreak();
+    showMsg(info.name + ' broke!');
+  }
+}
+
+function getBlockBreakTime(blockId) {
+  var hardness = BLOCK_HARDNESS[blockId];
+  if (hardness < 0) return -1; // unbreakable
+  if (hardness === 0) return 0.05;
+
+  var tool = currentToolInfo();
+  var multiplier = 1.0;
+
+  if (tool) {
+    var optimalTool = BLOCK_OPTIMAL_TOOL[blockId] || 0;
+    var toolTypeNum = TOOL_TYPES[tool.toolType] || 0;
+    if (optimalTool === toolTypeNum || optimalTool === 0) {
+      multiplier = 1.0 / TOOL_EFFICIENCY[tool.tier];
+    } else {
+      multiplier = 1.0 / (TOOL_EFFICIENCY[tool.tier] * 0.3);
+    }
+  }
+
+  return Math.max(0.05, hardness * multiplier);
+}
+
+// ---------- Progressive Block Breaking State ----------
+var breakingState = {
+  active: false,
+  blockX: 0,
+  blockY: 0,
+  blockZ: 0,
+  blockId: 0,
+  progress: 0,
+  targetTime: 0,
+  lastCrackStage: -1
+};
+
+function resetBreaking() {
+  breakingState.active = false;
+  breakingState.progress = 0;
+  breakingState.lastCrackStage = -1;
+}
+
+function startBreaking(hit) {
+  var blockId = hit.id;
+  var targetTime = getBlockBreakTime(blockId);
+  if (targetTime < 0) {
+    if (blockId === OBSIDIAN) showMsg('Need a better pickaxe!');
+    else showMsg('Cannot break this block');
+    return;
+  }
+  breakingState.active = true;
+  breakingState.blockX = hit.x;
+  breakingState.blockY = hit.y;
+  breakingState.blockZ = hit.z;
+  breakingState.blockId = blockId;
+  breakingState.progress = 0;
+  breakingState.targetTime = targetTime;
+  breakingState.lastCrackStage = -1;
+}
+
+function updateBreaking(dt) {
+  if (!breakingState.active) return;
+  breakingState.progress += dt;
+  var pct = Math.min(1.0, breakingState.progress / breakingState.targetTime);
+  var stage = Math.min(9, Math.floor(pct * 10));
+  if (stage !== breakingState.lastCrackStage) {
+    breakingState.lastCrackStage = stage;
+    sfxMiningProgress(stage);
+  }
+  if (pct >= 1.0) {
+    finishBreaking();
+  }
+}
+
+function finishBreaking() {
+  var bx = breakingState.blockX;
+  var by = breakingState.blockY;
+  var bz = breakingState.blockZ;
+  var blockId = breakingState.blockId;
+
+  if (getBlock(bx, by, bz) !== blockId) {
+    resetBreaking();
+    return;
+  }
+
+  setBlock(bx, by, bz, AIR);
+  sfxBreak(); swingHand();
+  invAdd('block', blockId, 1);
+
+  var tool = currentToolInfo();
+  if (tool) consumeToolDurability(inv.slots[selIndex]);
+
+  if (ORE_NAMES[blockId]) {
+    showMsg(ORE_NAMES[blockId] + ' ore mined!');
+    hunger = Math.min(20, hunger + 0.5);
+    updateBars();
+  }
+
+  resetBreaking();
+  if (invOpen) buildInvGrid();
+}
+
+// ---------- Crack Overlay Rendering (10 stages) ----------
+var bx_hash_seed = 12345;
+
 // ---------- Inventory UI ----------
 var invEl, invMainEl, invHotbarEl, invCraftEl, invCraftResultEl, invStatsEl, invTooltipEl, invCursorEl;
 
@@ -533,12 +775,36 @@ function drawInvSlotIcon(slot) {
       g.strokeStyle = 'rgba(0,0,0,0.4)';
       g.lineWidth = 1;
       g.strokeRect(3, 3, 24, 24);
-      // draw first letter of item name
-      g.fillStyle = '#fff';
-      g.font = 'bold 14px monospace';
-      g.textAlign = 'center';
-      g.textBaseline = 'middle';
-      g.fillText(slot.id[0], 15, 16);
+      // Draw tool shape or first letter
+      if (it.toolType) {
+        g.strokeStyle = '#fff';
+        g.lineWidth = 2;
+        g.beginPath();
+        if (it.toolType === 'pickaxe') {
+          g.moveTo(6, 6); g.lineTo(24, 18);
+          g.moveTo(6, 6); g.lineTo(12, 3);
+          g.moveTo(6, 6); g.lineTo(6, 12);
+        } else if (it.toolType === 'axe') {
+          g.moveTo(8, 6); g.lineTo(22, 20);
+          g.moveTo(8, 6); g.lineTo(16, 4);
+          g.moveTo(8, 6); g.lineTo(8, 14);
+        } else if (it.toolType === 'shovel') {
+          g.moveTo(10, 4); g.lineTo(10, 20);
+          g.moveTo(6, 4); g.lineTo(14, 4);
+          g.moveTo(6, 4); g.lineTo(6, 10);
+          g.moveTo(14, 4); g.lineTo(14, 10);
+        } else if (it.toolType === 'sword') {
+          g.moveTo(10, 4); g.lineTo(10, 24);
+          g.moveTo(6, 10); g.lineTo(14, 10);
+        }
+        g.stroke();
+      } else {
+        g.fillStyle = '#fff';
+        g.font = 'bold 14px monospace';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(slot.id[0], 15, 16);
+      }
     }
   }
   return cv;
@@ -556,6 +822,19 @@ function buildInvSlot(slot, idx, className, clickHandler, rightClickHandler) {
       cnt.className = 'inv-count';
       cnt.textContent = slot.count;
       d.appendChild(cnt);
+    }
+    // Show tool durability for tools
+    var toolInfo = getToolInfo(slot);
+    if (toolInfo) {
+      var durLeft = slot.durabilityLeft !== undefined ? slot.durabilityLeft : toolInfo.durability;
+      var durPct = durLeft / toolInfo.durability;
+      var durDiv = document.createElement('div');
+      durDiv.style.cssText = 'position:absolute;bottom:1px;left:2px;right:2px;height:3px;background:rgba(0,0,0,.5);border-radius:2px;';
+      var durFill = document.createElement('div');
+      var durColor = durPct > 0.5 ? '#4a4' : durPct > 0.25 ? '#cc4' : '#c44';
+      durFill.style.cssText = 'height:100%;width:' + (durPct*100) + '%;background:' + durColor + ';border-radius:2px;';
+      durDiv.appendChild(durFill);
+      d.appendChild(durDiv);
     }
     var nm = document.createElement('div');
     nm.className = 'inv-name';
@@ -804,9 +1083,25 @@ function showInvTooltip(slot, e) {
   var name = invSlotName(slot);
   var typeLabel = slot.type === 'block' ? 'Block' : 'Item';
   var info = '';
+  if (slot.type === 'block') {
+    var hardness = BLOCK_HARDNESS[slot.id];
+    if (hardness !== undefined) {
+      if (hardness < 0) info = 'Unbreakable';
+      else {
+        var tool = currentToolInfo();
+        var breakTime = getBlockBreakTime(slot.id);
+        var toolLabel = tool ? tool.name : 'Fist';
+        info = 'Hardness: ' + hardness.toFixed(1) + 's (' + toolLabel + ': ' + breakTime.toFixed(2) + 's)';
+      }
+    }
+  }
   if (slot.type === 'item') {
     var it = ITEMS[slot.id];
     if (it && it.food > 0) info = 'Food: +' + it.food;
+    if (it && it.toolType) {
+      var durLeft = slot.durabilityLeft !== undefined ? slot.durabilityLeft : it.durability;
+      info = it.toolType.charAt(0).toUpperCase() + it.toolType.slice(1) + ' | Tier: ' + TOOL_TIER_NAMES[it.tier] + ' | Durability: ' + durLeft + '/' + it.durability;
+    }
   }
   invTooltipEl.innerHTML = '';
   var nameDiv = document.createElement('div');
@@ -852,8 +1147,17 @@ function updateCursor() {
       if (it) {
         g.fillStyle = 'rgb('+Math.floor(it.color[0]*255)+','+Math.floor(it.color[1]*255)+','+Math.floor(it.color[2]*255)+')';
         g.fillRect(3,3,24,24);
-        g.fillStyle = '#fff'; g.font = 'bold 14px monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(inv.cursor.id[0], 15, 16);
+        if(it.toolType){
+          g.strokeStyle='#fff';g.lineWidth=2;g.beginPath();
+          if(it.toolType==='pickaxe'){g.moveTo(6,6);g.lineTo(24,18);g.moveTo(6,6);g.lineTo(12,3);g.moveTo(6,6);g.lineTo(6,12);}
+          else if(it.toolType==='axe'){g.moveTo(8,6);g.lineTo(22,20);g.moveTo(8,6);g.lineTo(16,4);g.moveTo(8,6);g.lineTo(8,14);}
+          else if(it.toolType==='shovel'){g.moveTo(10,4);g.lineTo(10,20);g.moveTo(6,4);g.lineTo(14,4);g.moveTo(6,4);g.lineTo(6,10);g.lineTo(14,4);g.lineTo(14,10);}
+          else if(it.toolType==='sword'){g.moveTo(10,4);g.lineTo(10,24);g.moveTo(6,10);g.lineTo(14,10);}
+          g.stroke();
+        } else {
+          g.fillStyle = '#fff'; g.font = 'bold 14px monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+          g.fillText(inv.cursor.id[0], 15, 16);
+        }
       }
     }
     var cntEl = invCursorEl.querySelector('.inv-cursor-count');
@@ -1447,6 +1751,17 @@ function sfxPop(){ tone(520, 0.12, 'sine', 0.3, 940); }
 function sfxExplode(){ noiseBurst(0.7, 0.9, 260); tone(65, 0.5, 'sine', 0.55, 28); }
 function sfxBird(){ var f=2200+Math.random()*1600; tone(f,0.09,'sine',0.10,f*1.4); setTimeout(function(){tone(f*1.2,0.08,'sine',0.08,f*0.8);},110); }
 function sfxCricket(){ for(var i=0;i<3;i++)(function(i){setTimeout(function(){tone(4200,0.04,'sine',0.05);},i*70);})(i); }
+function sfxMiningProgress(stage){
+  if(!AC) return;
+  try{
+    var f = 300 + stage * 80;
+    tone(f, 0.04, 'square', 0.06 + stage * 0.01);
+  }catch(e){}
+}
+function sfxToolBreak(){
+  tone(200, 0.3, 'sawtooth', 0.4, 60);
+  noiseBurst(0.15, 0.3, 600);
+}
 
 // ---------- Chunk meshing ----------
 function buildChunkMesh(c){
@@ -1693,11 +2008,30 @@ function doBreak(){
   if(hit.y===0){ showMsg('Cannot break bedrock'); return; }
   var id=hit.id;
   if(id===OBSIDIAN||id===NPORTAL){ showMsg('Cannot break obsidian or portal blocks'); return; }
+  // Progressive breaking: check if we're already breaking the same block
+  if(breakingState.active) {
+    if(breakingState.blockX===hit.x && breakingState.blockY===hit.y && breakingState.blockZ===hit.z) {
+      return; // already breaking this block
+    } else {
+      resetBreaking(); // switched target
+    }
+  }
+  startBreaking(hit);
+}
+function doBreakImmediate(){
+  var hit=raycast(eyePos(), lookDir(), REACH);
+  if(!hit) return;
+  if(hit.y===0){ showMsg('Cannot break bedrock'); return; }
+  var id=hit.id;
+  if(id===OBSIDIAN||id===NPORTAL){ showMsg('Cannot break obsidian or portal blocks'); return; }
   setBlock(hit.x,hit.y,hit.z,AIR);
   sfxBreak(); swingHand();
   invAdd('block', id, 1);
-  if(invOpen) buildInvGrid();
+  var tool = currentToolInfo();
+  if(tool) consumeToolDurability(inv.slots[selIndex]);
   if(ORE_NAMES[id]){ showMsg(ORE_NAMES[id]+' ore mined!'); hunger=Math.min(20,hunger+0.5); updateBars(); }
+  resetBreaking();
+  if(invOpen) buildInvGrid();
 }
 function doPlace(){
   var hit=raycast(eyePos(), lookDir(), REACH);
@@ -1945,7 +2279,10 @@ function attackMobs(){
     if(dd<d.hw+0.9 && t<bestT){ bestT=t; best=m; }
   }
   if(best){
-    hurtMob(best, 6, best.x-player.x, best.z-player.z);
+    var tool = currentToolInfo();
+    var baseDmg = tool ? tool.damage : 1;
+    hurtMob(best, baseDmg, best.x-player.x, best.z-player.z);
+    if(tool) consumeToolDurability(inv.slots[selIndex]);
     swingHand(); hitMark();
     return true;
   }
@@ -2171,6 +2508,37 @@ function render(){
     gl.uniform4f(uColF,0,0,0,0.9);
     gl.drawArrays(gl.LINES,0,L.length/3);
   }
+  // Breaking progress crack overlay
+  if(breakingState.active && selectedBlock){
+    var bx=breakingState.blockX, by=breakingState.blockY, bz=breakingState.blockZ;
+    if(selectedBlock.x===bx && selectedBlock.y===by && selectedBlock.z===bz){
+      var pct = Math.min(1.0, breakingState.progress / breakingState.targetTime);
+      var stage = Math.min(9, Math.floor(pct * 10));
+      var crackAlpha = 0.15 + pct * 0.55;
+      var crX0=bx-0.005, crY0=by-0.005, crZ0=bz-0.005;
+      var crX1=bx+1.005, crY1=by+1.005, crZ1=bz+1.005;
+      var cx=(crX0+crX1)/2, cy=(crY0+crY1)/2, cz=(crZ0+crZ1)/2;
+      var hw=0.505, hh=0.505, hd=0.505;
+      var verts2=[];
+      function addFace(ax,ay,az,bx2,by2,bz2,cx2,cy2,cz2,dx,dy,dz){
+        verts2.push(ax,ay,az,bx2,by2,bz2,cx2,cy2,cz2);
+        verts2.push(ax,ay,az,cx2,cy2,cz2,dx,dy,dz);
+      }
+      addFace(crX0,crY1,crZ0, crX1,crY1,crZ0, crX1,crY1,crZ1, crX0,crY1,crZ1);
+      addFace(crX0,crY0,crZ1, crX1,crY0,crZ1, crX1,crY0,crZ0, crX0,crY0,crZ0);
+      addFace(crX1,crY0,crZ0, crX1,crY0,crZ1, crX1,crY1,crZ1, crX1,crY1,crZ0);
+      addFace(crX0,crY0,crZ1, crX0,crY0,crZ0, crX0,crY1,crZ0, crX0,crY1,crZ1);
+      addFace(crX0,crY0,crZ1, crX0,crY1,crZ1, crX1,crY1,crZ1, crX1,crY0,crZ1);
+      addFace(crX1,crY0,crZ0, crX1,crY1,crZ0, crX0,crY1,crZ0, crX0,crY0,crZ0);
+      gl.bindBuffer(gl.ARRAY_BUFFER,selVBO);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(verts2),gl.DYNAMIC_DRAW);
+      gl.vertexAttribPointer(aPosF,3,gl.FLOAT,false,0,0);
+      var r = pct < 0.5 ? 0.0 : (pct - 0.5) * 2;
+      var g = pct < 0.5 ? pct * 2 : 1.0;
+      gl.uniform4f(uColF, r, g, 0.0, crackAlpha);
+      gl.drawArrays(gl.TRIANGLES,0,verts2.length/3);
+    }
+  }
   gl.enable(gl.CULL_FACE);
   renderWeather();
   gl.useProgram(prog);
@@ -2189,7 +2557,7 @@ function typingTarget(e){
   var tn=t.tagName.toUpperCase();
   return tn==='INPUT'||tn==='TEXTAREA'||tn==='SELECT'||t.isContentEditable===true;
 }
-function clearKeys(){ keys={}; breakHeld=false; breakTimer=0; }
+function clearKeys(){ keys={}; breakHeld=false; breakTimer=0; resetBreaking(); }
 window.addEventListener('blur', clearKeys);
 document.addEventListener('visibilitychange', function(){ if(document.hidden) clearKeys(); });
 document.addEventListener('keydown', function(e){
@@ -2236,11 +2604,19 @@ document.addEventListener('mousemove', function(e){
 document.addEventListener('mousedown', function(e){
   if(hasMod(e)) return; // e.g. macOS Ctrl+click keeps its native behavior
   if(!playing||!locked||invOpen) return;
-  if(e.button===0){ if(!attackMobs()) doBreak(); breakHeld=true; }
+  if(e.button===0){
+    if(!attackMobs()) doBreak();
+    breakHeld=true;
+  }
   if(e.button===2){ doPlace(); }
   if(e.button===1){ e.preventDefault(); pickBlock(); }
 });
-document.addEventListener('mouseup', function(e){ if(e.button===0) breakHeld=false; });
+document.addEventListener('mouseup', function(e){
+  if(e.button===0){
+    breakHeld=false;
+    resetBreaking();
+  }
+});
 document.addEventListener('contextmenu', function(e){
   // Suppress the menu on the game canvas during active play, or on inventory slots
   if(playing&&locked&&e.target===canvas) e.preventDefault();
@@ -2576,7 +2952,27 @@ function buildHotbar(){
         else {
           var g=cv.getContext('2d'); g.imageSmoothingEnabled=false;
           var it=ITEMS[slot.id];
-          if(it){ g.fillStyle='rgb('+Math.floor(it.color[0]*255)+','+Math.floor(it.color[1]*255)+','+Math.floor(it.color[2]*255)+')'; g.fillRect(2,2,28,28); g.fillStyle='#fff'; g.font='bold 14px monospace'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(slot.id[0],16,16); }
+          if(it){
+            g.fillStyle='rgb('+Math.floor(it.color[0]*255)+','+Math.floor(it.color[1]*255)+','+Math.floor(it.color[2]*255)+')';
+            g.fillRect(2,2,28,28);
+            if(it.toolType){
+              g.strokeStyle='#fff';g.lineWidth=1.5;g.beginPath();
+              if(it.toolType==='pickaxe'){g.moveTo(6,6);g.lineTo(26,20);g.moveTo(6,6);g.lineTo(12,3);g.moveTo(6,6);g.lineTo(6,12);}
+              else if(it.toolType==='axe'){g.moveTo(8,6);g.lineTo(24,22);g.moveTo(8,6);g.lineTo(16,3);g.moveTo(8,6);g.lineTo(8,14);}
+              else if(it.toolType==='shovel'){g.moveTo(10,3);g.lineTo(10,22);g.moveTo(6,3);g.lineTo(14,3);g.moveTo(6,3);g.lineTo(6,10);g.moveTo(14,3);g.lineTo(14,10);}
+              else if(it.toolType==='sword'){g.moveTo(10,3);g.lineTo(10,28);g.moveTo(6,10);g.lineTo(14,10);}
+              g.stroke();
+              // Durability bar
+              var durLeft = slot.durabilityLeft !== undefined ? slot.durabilityLeft : it.durability;
+              var durPct = durLeft / it.durability;
+              var durColor = durPct > 0.5 ? '#4a4' : durPct > 0.25 ? '#cc4' : '#c44';
+              g.fillStyle='rgba(0,0,0,.5)'; g.fillRect(2,28,28,3);
+              g.fillStyle=durColor; g.fillRect(2,28,Math.floor(28*durPct),3);
+            } else {
+              g.fillStyle='#fff'; g.font='bold 14px monospace'; g.textAlign='center'; g.textBaseline='middle';
+              g.fillText(slot.id[0],16,16);
+            }
+          }
         }
       }
       var k=document.createElement('div'); k.className='k'; k.textContent=(i+1);
@@ -2606,7 +3002,20 @@ function updateHand(){
       if(b) g.drawImage(atlasCanvas, b.side*16,0,16,16, 0,0,16,16);
     } else {
       var it=ITEMS[slot.id];
-      if(it){ g.fillStyle='rgb('+Math.floor(it.color[0]*255)+','+Math.floor(it.color[1]*255)+','+Math.floor(it.color[2]*255)+')'; g.fillRect(1,1,14,14); }
+      if(it){
+        g.fillStyle='rgb('+Math.floor(it.color[0]*255)+','+Math.floor(it.color[1]*255)+','+Math.floor(it.color[2]*255)+')';
+        if(it.toolType){
+          g.fillRect(1,1,14,14);
+          g.strokeStyle='#fff';g.lineWidth=1;g.beginPath();
+          if(it.toolType==='pickaxe'){g.moveTo(3,3);g.lineTo(13,9);g.moveTo(3,3);g.lineTo(6,2);g.moveTo(3,3);g.lineTo(3,6);}
+          else if(it.toolType==='axe'){g.moveTo(4,3);g.lineTo(12,11);g.moveTo(4,3);g.lineTo(8,2);g.moveTo(4,3);g.lineTo(4,7);}
+          else if(it.toolType==='shovel'){g.moveTo(5,2);g.lineTo(5,12);g.moveTo(3,2);g.lineTo(7,2);g.moveTo(3,2);g.lineTo(3,5);g.moveTo(7,2);g.lineTo(7,5);}
+          else if(it.toolType==='sword'){g.moveTo(5,2);g.lineTo(5,14);g.moveTo(3,5);g.lineTo(7,5);}
+          g.stroke();
+        } else {
+          g.fillRect(1,1,14,14);
+        }
+      }
     }
   }
 }
@@ -2685,8 +3094,11 @@ function loop(){
     processQueues();
     if(locked&&!dead){
       movePlayer(dt);
-      if(breakHeld){ breakTimer+=dt; if(breakTimer>0.25){ breakTimer=0; if(!attackMobs()) doBreak(); } }
-      else breakTimer=0;
+      if(breakHeld){
+        updateBreaking(dt);
+      } else {
+        breakTimer=0;
+      }
       updateSky(dt);
       updateMobs(dt);
       trySpawn(dt);
@@ -2703,6 +3115,30 @@ function loop(){
       perfTime+=dt;
       updateDebug();
       updateMinimap();
+      // Update breaking progress bar UI
+      var bpEl = document.getElementById('break-progress');
+      var bpFill = document.getElementById('break-progress-fill');
+      if(breakingState.active && selectedBlock &&
+         selectedBlock.x===breakingState.blockX &&
+         selectedBlock.y===breakingState.blockY &&
+         selectedBlock.z===breakingState.blockZ){
+        var pct = Math.min(1.0, breakingState.progress / breakingState.targetTime);
+        bpEl.style.display='block';
+        bpFill.style.width = (pct*100)+'%';
+      } else {
+        bpEl.style.display='none';
+      }
+      // Update tool durability display
+      var tdEl = document.getElementById('tool-durability');
+      var toolSlot = inv.slots[selIndex];
+      var toolInfo = getToolInfo(toolSlot);
+      if(toolInfo){
+        var durLeft = getToolCurrentDurability(toolSlot);
+        tdEl.style.display='block';
+        tdEl.textContent = toolInfo.name + ' ' + durLeft + '/' + toolInfo.durability;
+      } else {
+        tdEl.style.display='none';
+      }
       if(waypoints.length>0 && perfTime - lastWpUpdate > 3) { lastWpUpdate = perfTime; updateWaypointList(); }
       // Periodic inventory save
       if(inv.dirty) { saveInv(); inv.dirty=false; }
