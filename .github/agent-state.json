@@ -5,34 +5,27 @@
   "status": "issues_found",
   "findings": [
     {
-      "title": "Generic animals (pig/cow/sheep) render eyes twice",
+      "title": "AO neighbor sampling uses face normal instead of tangent directions",
       "severity": "medium",
       "file": "index.html",
-      "detail": "The else branch for generic animals (line 2129) already renders a pair of eyes for pig/cow/sheep. Then lines 2147-2153 render a second pair for 'remaining mobs' which matches the same types. Each generic animal gets 4 eye boxes instead of 2. Remove the post-if/else 'Eyes for remaining mobs' block entirely."
+      "detail": "The AO calculation uses d[0],d[1],d[2] (face normal) as tangent offsets for getBlock() calls. For a top face (d=[0,1,0]), s1=getBlock(vx2+0,vy2,vz2+0) checks the same block position — always air — so top/bottom faces always get AO=1.0 (no occlusion). For side faces, the normal direction is checked instead of the two perpendicular tangent axes. This makes AO shading wrong for every face orientation."
     },
     {
-      "title": "Spider renders 4 legs, not 8 as comment claims",
-      "severity": "medium",
-      "file": "index.html",
-      "detail": "Comment says 'Spider legs (8 total, 4 per side)' but the loop for(var leg=0;leg<4;leg++) only produces 4 legs total (2 per side). The spider is missing half its legs. Change loop to iterate 8 times."
-    },
-    {
-      "title": "Particle color is hardcoded - per-particle BLOCK_RGB color is ignored",
-      "severity": "medium",
-      "file": "index.html",
-      "detail": "spawnParticles() stores per-particle r,g,b from BLOCK_RGB, but renderParticles() uses hardcoded gl.uniform4f(uColF,0.7,0.6,0.4,0.7) for all particles. Every block-break particle appears the same color regardless of block type."
-    },
-    {
-      "title": "Star twinkle computed but never used in rendering",
+      "title": "Particle drag is frame-rate dependent",
       "severity": "low",
       "file": "index.html",
-      "detail": "var twinkle=0.5+0.5*Math.sin(perfTime*2+si3*1.7) is computed per-star but never affects rendering. Stars render at constant opacity nightness2*0.7, so they don't twinkle."
+      "detail": "p.vx*=0.95; p.vz*=0.95; is applied per frame without scaling by dt. At 60fps this reduces velocity to ~4.6%/s; at 30fps it is ~21.5%/s. Particles decelerate at different rates depending on frame rate."
     }
   ],
   "history": [
     {
       "agent": "review",
       "cycle": 0,
+      "result": "issues_found"
+    },
+    {
+      "agent": "review",
+      "cycle": 1,
       "result": "issues_found"
     }
   ]
