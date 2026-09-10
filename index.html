@@ -231,28 +231,28 @@ var AIR=0, GRASS=1, DIRT=2, STONE=3, LOG=4, LEAF=5, SAND=6, PLANK=7, GLASS=8,
     BRICK=9, WATER=10, COAL=11, IRON=12, GOLD=13, DIAM=14, SNOWG=15, CACTUS=16,
     NETHERRACK=17, NPORTAL=18, OBSIDIAN=19, SOULSAND=20, GLOWSTONE=21, LAVA=22;
 var BLOCKS = {
-  1:{name:'Grass', top:0, side:1, bottom:2},
-  2:{name:'Dirt', top:2, side:2, bottom:2},
-  3:{name:'Stone', top:3, side:3, bottom:3},
-  4:{name:'Wood Log', top:5, side:4, bottom:5},
-  5:{name:'Leaves', top:6, side:6, bottom:6},
-  6:{name:'Sand', top:7, side:7, bottom:7},
-  7:{name:'Planks', top:9, side:9, bottom:9},
-  8:{name:'Glass', top:10, side:10, bottom:10},
-  9:{name:'Brick', top:11, side:11, bottom:11},
-  10:{name:'Water', top:8, side:8, bottom:8},
-  11:{name:'Coal Ore', top:14, side:14, bottom:14},
-  12:{name:'Iron Ore', top:15, side:15, bottom:15},
-  13:{name:'Gold Ore', top:16, side:16, bottom:16},
-  14:{name:'Diamond Ore', top:17, side:17, bottom:17},
-  15:{name:'Snowy Grass', top:18, side:19, bottom:2},
-  16:{name:'Cactus', top:21, side:20, bottom:21},
-  17:{name:'Netherrack', top:22, side:22, bottom:22},
-  18:{name:'Nether Portal', top:23, side:23, bottom:23},
-  19:{name:'Obsidian', top:24, side:24, bottom:24},
-  20:{name:'Soul Sand', top:25, side:25, bottom:25},
-  21:{name:'Glowstone', top:26, side:26, bottom:26},
-  22:{name:'Lava', top:27, side:27, bottom:27}
+  1:{name:'Grass', top:0, side:1, bottom:2, hard:0.6},
+  2:{name:'Dirt', top:2, side:2, bottom:2, hard:0.5},
+  3:{name:'Stone', top:3, side:3, bottom:3, hard:1.5},
+  4:{name:'Wood Log', top:5, side:4, bottom:5, hard:2.0},
+  5:{name:'Leaves', top:6, side:6, bottom:6, hard:0.3},
+  6:{name:'Sand', top:7, side:7, bottom:7, hard:0.5},
+  7:{name:'Planks', top:9, side:9, bottom:9, hard:2.0},
+  8:{name:'Glass', top:10, side:10, bottom:10, hard:0.3},
+  9:{name:'Brick', top:11, side:11, bottom:11, hard:2.0},
+  10:{name:'Water', top:8, side:8, bottom:8, hard:100},
+  11:{name:'Coal Ore', top:14, side:14, bottom:14, hard:3.0},
+  12:{name:'Iron Ore', top:15, side:15, bottom:15, hard:3.0},
+  13:{name:'Gold Ore', top:16, side:16, bottom:16, hard:3.0},
+  14:{name:'Diamond Ore', top:17, side:17, bottom:17, hard:3.0},
+  15:{name:'Snowy Grass', top:18, side:19, bottom:2, hard:0.6},
+  16:{name:'Cactus', top:21, side:20, bottom:21, hard:0.4},
+  17:{name:'Netherrack', top:22, side:22, bottom:22, hard:1.0},
+  18:{name:'Nether Portal', top:23, side:23, bottom:23, hard:100},
+  19:{name:'Obsidian', top:24, side:24, bottom:24, hard:50},
+  20:{name:'Soul Sand', top:25, side:25, bottom:25, hard:1.0},
+  21:{name:'Glowstone', top:26, side:26, bottom:26, hard:0.5},
+  22:{name:'Lava', top:27, side:27, bottom:27, hard:100}
 };
 var HOTBAR = [GRASS,DIRT,STONE,LOG,LEAF,SAND,PLANK,GLASS,BRICK];
 var selIndex = 0;
@@ -2095,6 +2095,7 @@ var clouds=[];
 for(var ci=0;ci<16;ci++) clouds.push({ox:Math.random()*160-80, oz:Math.random()*160-80, w:6+Math.random()*10, d:5+Math.random()*8, s:0.6+Math.random()*0.8});
 var cloudVBO=gl.createBuffer();
 var selVBO=gl.createBuffer();
+var crackVBO=gl.createBuffer();
 
 // ---------- Resize ----------
 function resize(){
@@ -2181,6 +2182,25 @@ function render(){
     gl.uniform4f(uColF,0,0,0,0.9);
     gl.drawArrays(gl.LINES,0,L.length/3);
   }
+  if(mineTarget&&mineProgress>0){
+    var hard=BLOCKS[mineTarget.id]?BLOCKS[mineTarget.id].hard:1;
+    var pct=Math.min(1,mineProgress/hard);
+    var cx=mineTarget.x+0.5, cy=mineTarget.y+0.5, cz=mineTarget.z+0.5;
+    var s=0.51;
+    var faces=[
+      cx-s,cy-s,cz-s, cx-s,cy-s,cz+s, cx+s,cy-s,cz+s, cx+s,cy-s,cz-s,
+      cx-s,cy+s,cz-s, cx+s,cy+s,cz-s, cx+s,cy+s,cz+s, cx-s,cy+s,cz+s,
+      cx-s,cy-s,cz-s, cx+s,cy-s,cz-s, cx+s,cy+s,cz-s, cx-s,cy+s,cz-s,
+      cx-s,cy-s,cz+s, cx-s,cy+s,cz+s, cx+s,cy+s,cz+s, cx+s,cy-s,cz+s,
+      cx-s,cy-s,cz-s, cx-s,cy+s,cz-s, cx-s,cy+s,cz+s, cx-s,cy-s,cz+s,
+      cx+s,cy-s,cz-s, cx+s,cy-s,cz+s, cx+s,cy+s,cz+s, cx+s,cy+s,cz-s
+    ];
+    gl.bindBuffer(gl.ARRAY_BUFFER,crackVBO);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(faces),gl.DYNAMIC_DRAW);
+    gl.vertexAttribPointer(aPosF,3,gl.FLOAT,false,0,0);
+    gl.uniform4f(uColF,0,0,0,0.15+pct*0.55);
+    gl.drawArrays(gl.TRIANGLES,0,faces.length/3);
+  }
   gl.enable(gl.CULL_FACE);
   renderWeather();
   gl.useProgram(prog);
@@ -2199,7 +2219,7 @@ function typingTarget(e){
   var tn=t.tagName.toUpperCase();
   return tn==='INPUT'||tn==='TEXTAREA'||tn==='SELECT'||t.isContentEditable===true;
 }
-function clearKeys(){ keys={}; breakHeld=false; breakTimer=0; }
+function clearKeys(){ keys={}; breakHeld=false; breakTimer=0; mineTarget=null; mineProgress=0; }
 window.addEventListener('blur', clearKeys);
 document.addEventListener('visibilitychange', function(){ if(document.hidden) clearKeys(); });
 document.addEventListener('keydown', function(e){
@@ -2246,7 +2266,7 @@ document.addEventListener('mousemove', function(e){
 document.addEventListener('mousedown', function(e){
   if(hasMod(e)) return; // e.g. macOS Ctrl+click keeps its native behavior
   if(!playing||!locked||invOpen) return;
-  if(e.button===0){ if(!attackMobs()) doBreak(); breakHeld=true; }
+  if(e.button===0){ if(!attackMobs()) breakHeld=true; }
   if(e.button===2){ doPlace(); }
   if(e.button===1){ e.preventDefault(); pickBlock(); }
 });
@@ -2261,6 +2281,7 @@ document.addEventListener('wheel', function(e){
   selectSlot((selIndex+(e.deltaY>0?1:8))%9);
 }, {passive:true});
 var breakHeld=false, breakTimer=0;
+var mineTarget=null, mineProgress=0;
 function lockPointer(){ try{ canvas.requestPointerLock && canvas.requestPointerLock(); }catch(e){} }
 // Pointer lock is only ever requested from explicit player clicks (Play /
 // Resume / Done). Escape always releases it natively via the browser.
@@ -2702,8 +2723,27 @@ function loop(){
     processQueues();
     if(locked&&!dead){
       movePlayer(dt);
-      if(breakHeld){ breakTimer+=dt; if(breakTimer>0.25){ breakTimer=0; if(!attackMobs()) doBreak(); } }
-      else breakTimer=0;
+      if(breakHeld){
+        if(!attackMobs()){
+          var hit=raycast(eyePos(),lookDir(),REACH);
+          if(hit){
+            if(hit.y===0||hit.id===OBSIDIAN||hit.id===NPORTAL){
+              mineTarget=null; mineProgress=0;
+            } else {
+              if(!mineTarget||mineTarget.x!==hit.x||mineTarget.y!==hit.y||mineTarget.z!==hit.z){
+                mineTarget={x:hit.x,y:hit.y,z:hit.z,id:hit.id};
+                mineProgress=0;
+              }
+              var hard=BLOCKS[hit.id]?BLOCKS[hit.id].hard:1;
+              mineProgress+=dt;
+              if(mineProgress>=hard){
+                doBreak();
+                mineTarget=null; mineProgress=0;
+              }
+            }
+          } else { mineTarget=null; mineProgress=0; }
+        } else { mineTarget=null; mineProgress=0; }
+      } else { mineTarget=null; mineProgress=0; }
       updateSky(dt);
       updateMobs(dt);
       trySpawn(dt);
