@@ -29,6 +29,8 @@
   .slot canvas { width:32px; height:32px; image-rendering:pixelated; }
   .slot .k { position:absolute; top:1px; left:4px; font-size:10px; color:#ccc; font-family:monospace; }
   .slot .n { font-size:8px; color:#eee; margin-top:1px; text-shadow:1px 1px 0 #000; white-space:nowrap; }
+  .slot .dur-bar { position:absolute; bottom:2px; left:4px; right:4px; height:3px; background:rgba(0,0,0,.5); border-radius:1px; overflow:hidden; }
+  .slot .dur-fill { height:100%; border-radius:1px; }
   #hand { position:absolute; right:40px; bottom:30px; width:140px; height:140px; z-index:14; pointer-events:none; transform-origin:70% 80%; transition:transform .08s; }
   #hand-inner { width:100%; height:100%; position:relative; }
   #hand-block { position:absolute; right:20px; bottom:30px; width:72px; height:72px; image-rendering:pixelated; border-radius:6px; box-shadow:4px 6px 0 rgba(0,0,0,.4); transform:rotate(-12deg) skew(-6deg); }
@@ -219,19 +221,19 @@ var IRON_PICK=30, IRON_AXE=31, IRON_SHOVEL=32;
 var DIAM_PICK=33, DIAM_AXE=34, DIAM_SHOVEL=35;
 // Tool metadata: id -> {name, type, mat, speed, atk}
 var TOOLS={};
-function defTool(id,nm,tp,mt,sp,ak){ TOOLS[id]={name:nm,type:tp,mat:mt,speed:sp,atk:ak}; }
-defTool(WOOD_PICK,'Wooden Pickaxe','pickaxe','wood',2,4);
-defTool(WOOD_AXE,'Wooden Axe','axe','wood',2,5);
-defTool(WOOD_SHOVEL,'Wooden Shovel','shovel','wood',2,3);
-defTool(STONE_PICK,'Stone Pickaxe','pickaxe','stone',4,6);
-defTool(STONE_AXE,'Stone Axe','axe','stone',4,7);
-defTool(STONE_SHOVEL,'Stone Shovel','shovel','stone',4,5);
-defTool(IRON_PICK,'Iron Pickaxe','pickaxe','iron',6,8);
-defTool(IRON_AXE,'Iron Axe','axe','iron',6,9);
-defTool(IRON_SHOVEL,'Iron Shovel','shovel','iron',6,7);
-defTool(DIAM_PICK,'Diamond Pickaxe','pickaxe','diamond',8,10);
-defTool(DIAM_AXE,'Diamond Axe','axe','diamond',8,11);
-defTool(DIAM_SHOVEL,'Diamond Shovel','shovel','diamond',8,9);
+function defTool(id,nm,tp,mt,sp,ak,dp){ TOOLS[id]={name:nm,type:tp,mat:mt,speed:sp,atk:ak,dur:dp}; }
+defTool(WOOD_PICK,'Wooden Pickaxe','pickaxe','wood',2,4,60);
+defTool(WOOD_AXE,'Wooden Axe','axe','wood',2,5,60);
+defTool(WOOD_SHOVEL,'Wooden Shovel','shovel','wood',2,3,60);
+defTool(STONE_PICK,'Stone Pickaxe','pickaxe','stone',4,6,132);
+defTool(STONE_AXE,'Stone Axe','axe','stone',4,7,132);
+defTool(STONE_SHOVEL,'Stone Shovel','shovel','stone',4,5,132);
+defTool(IRON_PICK,'Iron Pickaxe','pickaxe','iron',6,8,251);
+defTool(IRON_AXE,'Iron Axe','axe','iron',6,9,251);
+defTool(IRON_SHOVEL,'Iron Shovel','shovel','iron',6,7,251);
+defTool(DIAM_PICK,'Diamond Pickaxe','pickaxe','diamond',8,10,1562);
+defTool(DIAM_AXE,'Diamond Axe','axe','diamond',8,11,1562);
+defTool(DIAM_SHOVEL,'Diamond Shovel','shovel','diamond',8,9,1562);
 // Crafting recipes: {result:{id,n}, ing:[{id,n}...]}
 var RECIPES=[
   {result:{id:PLANK,n:4},ing:[{id:LOG,n:1}]},
@@ -254,13 +256,15 @@ function isTool(id){ return !!TOOLS[id]; }
 // Inventory: 36 slots (0-8 = hotbar, 9-35 = main inventory)
 var inv=[];
 for(var ii=0;ii<36;ii++) inv.push({id:AIR,n:0});
+var invDur=[];
+for(var ii=0;ii<36;ii++) invDur.push(0);
 var SLOT_MAX=64;
 function invCount(slotId){ return inv[slotId]?inv[slotId].n:0; }
 function invAdd(id,n){
   if(id===AIR||n<=0) return 0;
   if(isTool(id)){
     for(var i=0;i<36;i++){
-      if(inv[i].n===0){ inv[i].id=id; inv[i].n=1; return 1; }
+      if(inv[i].n===0){ inv[i].id=id; inv[i].n=1; invDur[i]=TOOLS[id].dur; return 1; }
     }
     return 0;
   }
@@ -284,8 +288,19 @@ function invAdd(id,n){
 function invRemove(slotId,n){
   if(!inv[slotId]) return false;
   inv[slotId].n-=n;
-  if(inv[slotId].n<=0){ inv[slotId].id=AIR; inv[slotId].n=0; }
+  if(inv[slotId].n<=0){ inv[slotId].id=AIR; inv[slotId].n=0; invDur[slotId]=0; }
   return true;
+}
+function damageTool(slotId){
+  if(!isTool(inv[slotId].id)) return false;
+  invDur[slotId]--;
+  if(invDur[slotId]<=0){
+    inv[slotId].id=AIR; inv[slotId].n=0; invDur[slotId]=0;
+    sfxBreak(); showMsg('Tool broke!');
+    buildHotbar(); updateHand();
+    return true;
+  }
+  return false;
 }
 // Initialize hotbar with starting blocks (64 each)
 var START_ITEMS=[GRASS,DIRT,STONE,LOG,LEAF,SAND,PLANK,GLASS,BRICK];
@@ -1398,6 +1413,7 @@ function attackMobs(){
   if(best){
     hurtMob(best, getAttackDamage(), best.x-player.x, best.z-player.z);
     swingHand(); hitMark();
+    damageTool(selIndex);
     return true;
   }
   return false;
@@ -1805,6 +1821,18 @@ function buildInvGrid(){
       drawBlockIcon(cv, inv[i].id);
       var n=document.createElement('div'); n.className='n'; n.textContent=inv[i].n>0?(getItemName(inv[i].id)+(inv[i].n>1?' x'+inv[i].n:'')):'';
       d.appendChild(cv); d.appendChild(n);
+      if(isTool(inv[i].id) && TOOLS[inv[i].id].dur){
+        var maxDur=TOOLS[inv[i].id].dur;
+        var curDur=invDur[i];
+        var ratio=curDur/maxDur;
+        var bar=document.createElement('div'); bar.className='dur-bar';
+        var fill=document.createElement('div'); fill.className='dur-fill';
+        var r=Math.round(255*(1-ratio)), g=Math.round(255*ratio);
+        fill.style.width=Math.round(ratio*100)+'%';
+        fill.style.background='rgb('+r+','+g+',0)';
+        bar.appendChild(fill);
+        d.appendChild(bar);
+      }
       d.addEventListener('click', function(){ if(inv[i].n>0) selectSlot(i%9); buildInvGrid(); });
       grid.appendChild(d);
     })(i);
@@ -2154,6 +2182,18 @@ function buildHotbar(){
       var k=document.createElement('div'); k.className='k'; k.textContent=(i+1);
       var n=document.createElement('div'); n.className='n'; n.textContent=inv[i].n>0?(getItemName(inv[i].id)+(inv[i].n>1?' x'+inv[i].n:'')):'Empty';
       d.appendChild(cv); d.appendChild(k); d.appendChild(n);
+      if(isTool(inv[i].id) && TOOLS[inv[i].id].dur){
+        var maxDur=TOOLS[inv[i].id].dur;
+        var curDur=invDur[i];
+        var ratio=curDur/maxDur;
+        var bar=document.createElement('div'); bar.className='dur-bar';
+        var fill=document.createElement('div'); fill.className='dur-fill';
+        var r=Math.round(255*(1-ratio)), g=Math.round(255*ratio);
+        fill.style.width=Math.round(ratio*100)+'%';
+        fill.style.background='rgb('+r+','+g+',0)';
+        bar.appendChild(fill);
+        d.appendChild(bar);
+      }
       hotbarEl.appendChild(d); slotCanvases.push(d);
     })(i);
   }
@@ -2165,7 +2205,14 @@ function selectSlot(i){
   updateSelectedLabel(); updateHand();
   if(invOpen||craftOpen) buildInvGrid();
 }
-function updateSelectedLabel(){ document.getElementById('selected-label').textContent=getItemName(inv[selIndex].id)+' ['+(selIndex+1)+']'+(inv[selIndex].n>1?' x'+inv[selIndex].n:''); }
+function updateSelectedLabel(){
+  var label=getItemName(inv[selIndex].id)+' ['+(selIndex+1)+']';
+  if(inv[selIndex].n>1) label+=' x'+inv[selIndex].n;
+  if(isTool(inv[selIndex].id) && TOOLS[inv[selIndex].id].dur){
+    label+=' '+invDur[selIndex]+'/'+TOOLS[inv[selIndex].id].dur;
+  }
+  document.getElementById('selected-label').textContent=label;
+}
 function updateHand(){
   var hb=document.getElementById('hand-block');
   var g=hb.getContext('2d'); g.imageSmoothingEnabled=false;
@@ -2260,9 +2307,6 @@ function loop(){
             var key=hit.x+','+hit.y+','+hit.z;
             if(miningTarget!==key){ doBreak(); mineTickTimer=0; }
             if(miningHardness>0){
-              var baseH=HARDNESS[hit.id]||1.0;
-              var mult=getMiningMultiplier(inv[selIndex].id, hit.id);
-              miningHardness=baseH/mult;
               miningProgress+=dt;
               mineTickTimer+=dt;
               if(mineTickTimer>0.3){ mineTickTimer=0; sfxMine(); }
@@ -2270,6 +2314,7 @@ function loop(){
                 spawnBlockDrops(hit.x,hit.y,hit.z,hit.id);
                 setBlock(hit.x,hit.y,hit.z,AIR);
                 sfxBreak(); swingHand();
+                damageTool(selIndex);
                 if(ORE_NAMES[hit.id]){ showMsg(ORE_NAMES[hit.id]+' ore mined!'); }
                 miningTarget=null; miningProgress=0;
               }
@@ -2277,6 +2322,7 @@ function loop(){
               spawnBlockDrops(hit.x,hit.y,hit.z,hit.id);
               setBlock(hit.x,hit.y,hit.z,AIR);
               sfxBreak(); swingHand();
+              damageTool(selIndex);
               miningTarget=null; miningProgress=0;
             }
           }
