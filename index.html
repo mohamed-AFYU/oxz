@@ -969,6 +969,7 @@ function damage(n){
 function respawn(){
   if(currentDimension==='nether'){
     netherChunks=chunks; chunks=overworldChunks; currentDimension='overworld';
+    portalCooldown = 3.0; portalTimer = 0;
     updateStreaming(true);
   }
   var sy=surfaceY(spawnPt.x, spawnPt.z);
