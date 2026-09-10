@@ -231,26 +231,26 @@ var AIR=0, GRASS=1, DIRT=2, STONE=3, LOG=4, LEAF=5, SAND=6, PLANK=7, GLASS=8,
     BRICK=9, WATER=10, COAL=11, IRON=12, GOLD=13, DIAM=14, SNOWG=15, CACTUS=16,
     NETHERRACK=17, NPORTAL=18, OBSIDIAN=19, SOULSAND=20, GLOWSTONE=21, LAVA=22;
 var BLOCKS = {
-  1:{name:'Grass', top:0, side:1, bottom:2, hard:0.6},
-  2:{name:'Dirt', top:2, side:2, bottom:2, hard:0.5},
-  3:{name:'Stone', top:3, side:3, bottom:3, hard:1.5},
-  4:{name:'Wood Log', top:5, side:4, bottom:5, hard:2.0},
+  1:{name:'Grass', top:0, side:1, bottom:2, hard:0.6, tool:'shovel'},
+  2:{name:'Dirt', top:2, side:2, bottom:2, hard:0.5, tool:'shovel'},
+  3:{name:'Stone', top:3, side:3, bottom:3, hard:1.5, tool:'pickaxe', minTool:1},
+  4:{name:'Wood Log', top:5, side:4, bottom:5, hard:2.0, tool:'axe'},
   5:{name:'Leaves', top:6, side:6, bottom:6, hard:0.3},
-  6:{name:'Sand', top:7, side:7, bottom:7, hard:0.5},
-  7:{name:'Planks', top:9, side:9, bottom:9, hard:2.0},
+  6:{name:'Sand', top:7, side:7, bottom:7, hard:0.5, tool:'shovel'},
+  7:{name:'Planks', top:9, side:9, bottom:9, hard:2.0, tool:'axe'},
   8:{name:'Glass', top:10, side:10, bottom:10, hard:0.3},
-  9:{name:'Brick', top:11, side:11, bottom:11, hard:2.0},
+  9:{name:'Brick', top:11, side:11, bottom:11, hard:2.0, tool:'pickaxe', minTool:1},
   10:{name:'Water', top:8, side:8, bottom:8, hard:100},
-  11:{name:'Coal Ore', top:14, side:14, bottom:14, hard:3.0},
-  12:{name:'Iron Ore', top:15, side:15, bottom:15, hard:3.0},
-  13:{name:'Gold Ore', top:16, side:16, bottom:16, hard:3.0},
-  14:{name:'Diamond Ore', top:17, side:17, bottom:17, hard:3.0},
-  15:{name:'Snowy Grass', top:18, side:19, bottom:2, hard:0.6},
+  11:{name:'Coal Ore', top:14, side:14, bottom:14, hard:3.0, tool:'pickaxe', minTool:1},
+  12:{name:'Iron Ore', top:15, side:15, bottom:15, hard:3.0, tool:'pickaxe', minTool:2},
+  13:{name:'Gold Ore', top:16, side:16, bottom:16, hard:3.0, tool:'pickaxe', minTool:3},
+  14:{name:'Diamond Ore', top:17, side:17, bottom:17, hard:3.0, tool:'pickaxe', minTool:3},
+  15:{name:'Snowy Grass', top:18, side:19, bottom:2, hard:0.6, tool:'shovel'},
   16:{name:'Cactus', top:21, side:20, bottom:21, hard:0.4},
-  17:{name:'Netherrack', top:22, side:22, bottom:22, hard:1.0},
+  17:{name:'Netherrack', top:22, side:22, bottom:22, hard:1.0, tool:'pickaxe'},
   18:{name:'Nether Portal', top:23, side:23, bottom:23, hard:100},
-  19:{name:'Obsidian', top:24, side:24, bottom:24, hard:50},
-  20:{name:'Soul Sand', top:25, side:25, bottom:25, hard:1.0},
+  19:{name:'Obsidian', top:24, side:24, bottom:24, hard:50, tool:'pickaxe', minTool:4},
+  20:{name:'Soul Sand', top:25, side:25, bottom:25, hard:1.0, tool:'shovel'},
   21:{name:'Glowstone', top:26, side:26, bottom:26, hard:0.5},
   22:{name:'Lava', top:27, side:27, bottom:27, hard:100}
 };
@@ -272,6 +272,20 @@ var ITEMS = {
   'Blaze Rod':   {name:'Blaze Rod',   color:[1,0.65,0.1],  maxStack:64, food:0},
   'Magma Cream': {name:'Magma Cream', color:[0.9,0.4,0.1], maxStack:64, food:0},
   'Gold Nugget': {name:'Gold Nugget', color:[0.96,0.84,0.26],maxStack:64, food:0},
+  'Iron Ingot':  {name:'Iron Ingot',  color:[0.85,0.85,0.85],maxStack:64, food:0},
+  'Diamond':     {name:'Diamond',     color:[0.43,0.95,0.95],maxStack:64, food:0},
+  'Wooden Pickaxe':  {name:'Wooden Pickaxe',  color:[0.65,0.49,0.23],maxStack:1, tool:'pickaxe', tier:1, food:0},
+  'Stone Pickaxe':   {name:'Stone Pickaxe',   color:[0.55,0.55,0.55],maxStack:1, tool:'pickaxe', tier:2, food:0},
+  'Iron Pickaxe':    {name:'Iron Pickaxe',    color:[0.85,0.85,0.85],maxStack:1, tool:'pickaxe', tier:3, food:0},
+  'Diamond Pickaxe': {name:'Diamond Pickaxe', color:[0.43,0.95,0.95],maxStack:1, tool:'pickaxe', tier:4, food:0},
+  'Wooden Axe':      {name:'Wooden Axe',      color:[0.65,0.49,0.23],maxStack:1, tool:'axe', tier:1, food:0},
+  'Stone Axe':       {name:'Stone Axe',       color:[0.55,0.55,0.55],maxStack:1, tool:'axe', tier:2, food:0},
+  'Iron Axe':        {name:'Iron Axe',        color:[0.85,0.85,0.85],maxStack:1, tool:'axe', tier:3, food:0},
+  'Diamond Axe':     {name:'Diamond Axe',     color:[0.43,0.95,0.95],maxStack:1, tool:'axe', tier:4, food:0},
+  'Wooden Shovel':   {name:'Wooden Shovel',   color:[0.65,0.49,0.23],maxStack:1, tool:'shovel', tier:1, food:0},
+  'Stone Shovel':    {name:'Stone Shovel',    color:[0.55,0.55,0.55],maxStack:1, tool:'shovel', tier:2, food:0},
+  'Iron Shovel':     {name:'Iron Shovel',     color:[0.85,0.85,0.85],maxStack:1, tool:'shovel', tier:3, food:0},
+  'Diamond Shovel':  {name:'Diamond Shovel',  color:[0.43,0.95,0.95],maxStack:1, tool:'shovel', tier:4, food:0},
 };
 
 // ---------- Inventory System ----------
@@ -387,17 +401,68 @@ function syncHotbarToInv() {
 function checkCrafting() {
   inv.craft[4] = null; // clear result
   var c = inv.craft;
-  // Recipe: 1 Log -> 4 Planks (any log type)
-  if (c[0] && c[0].type==='block' && (c[0].id===LOG) && c[0].count>=1 && !c[1] && !c[2] && !c[3]) {
+  function isBlock(i, id){ return c[i] && c[i].type==='block' && c[i].id===id; }
+  function isItem(i, name){ return c[i] && c[i].type==='item' && c[i].id===name; }
+  function isEmpty(i){ return !c[i]; }
+  // Recipe: 1 Log -> 4 Planks
+  if(isBlock(0,LOG) && isEmpty(1) && isEmpty(2) && isEmpty(3)){
     inv.craft[4] = makeSlot('block', PLANK, 4); return;
   }
   // Recipe: 2 Planks -> 4 Sticks
-  if (c[0] && c[0].type==='block' && c[0].id===PLANK && c[0].count>=2 && !c[1] && !c[2] && !c[3]) {
+  if(isBlock(0,PLANK) && c[0].count>=2 && isEmpty(1) && isEmpty(2) && isEmpty(3)){
     inv.craft[4] = makeSlot('item', 'Stick', 4); return;
   }
   // Recipe: 1 Plank + 1 Coal -> 4 Torches
-  if (c[0] && c[0].type==='block' && c[0].id===PLANK && c[1] && c[1].type==='block' && c[1].id===COAL && !c[2] && !c[3]) {
+  if(isBlock(0,PLANK) && isBlock(1,COAL) && isEmpty(2) && isEmpty(3)){
     inv.craft[4] = makeSlot('item', 'Torch', 4); return;
+  }
+  // Wooden Pickaxe: [Plank][Plank] / [Stick][Stick]
+  if(isBlock(0,PLANK) && isBlock(1,PLANK) && isItem(2,'Stick') && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Wooden Pickaxe', 1); return;
+  }
+  // Wooden Axe: [Plank][Plank] / [Plank][Stick]
+  if(isBlock(0,PLANK) && isBlock(1,PLANK) && isBlock(2,PLANK) && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Wooden Axe', 1); return;
+  }
+  // Wooden Shovel: [ ][Plank] / [ ][Stick]
+  if(isEmpty(0) && isBlock(1,PLANK) && isEmpty(2) && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Wooden Shovel', 1); return;
+  }
+  // Stone Pickaxe: [Stone][Stone] / [Stick][Stick]
+  if(isBlock(0,STONE) && isBlock(1,STONE) && isItem(2,'Stick') && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Stone Pickaxe', 1); return;
+  }
+  // Stone Axe: [Stone][Stone] / [Stone][Stick]
+  if(isBlock(0,STONE) && isBlock(1,STONE) && isBlock(2,STONE) && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Stone Axe', 1); return;
+  }
+  // Stone Shovel: [ ][Stone] / [ ][Stick]
+  if(isEmpty(0) && isBlock(1,STONE) && isEmpty(2) && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Stone Shovel', 1); return;
+  }
+  // Iron Pickaxe: [Iron Ingot][Iron Ingot] / [Stick][Stick]
+  if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Stick') && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Iron Pickaxe', 1); return;
+  }
+  // Iron Axe: [Iron Ingot][Iron Ingot] / [Iron Ingot][Stick]
+  if(isItem(0,'Iron Ingot') && isItem(1,'Iron Ingot') && isItem(2,'Iron Ingot') && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Iron Axe', 1); return;
+  }
+  // Iron Shovel: [ ][Iron Ingot] / [ ][Stick]
+  if(isEmpty(0) && isItem(1,'Iron Ingot') && isEmpty(2) && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Iron Shovel', 1); return;
+  }
+  // Diamond Pickaxe: [Diamond][Diamond] / [Stick][Stick]
+  if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Stick') && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Diamond Pickaxe', 1); return;
+  }
+  // Diamond Axe: [Diamond][Diamond] / [Diamond][Stick]
+  if(isItem(0,'Diamond') && isItem(1,'Diamond') && isItem(2,'Diamond') && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Diamond Axe', 1); return;
+  }
+  // Diamond Shovel: [ ][Diamond] / [ ][Stick]
+  if(isEmpty(0) && isItem(1,'Diamond') && isEmpty(2) && isItem(3,'Stick')){
+    inv.craft[4] = makeSlot('item', 'Diamond Shovel', 1); return;
   }
 }
 
@@ -734,6 +799,12 @@ function showInvTooltip(slot, e) {
   if (slot.type === 'item') {
     var it = ITEMS[slot.id];
     if (it && it.food > 0) info = 'Food: +' + it.food;
+    if (it && it.tool) info = (info ? info + ' \u2022 ' : '') + 'Tool: ' + it.tool + ' (tier ' + it.tier + ')';
+  }
+  if (slot.type === 'block') {
+    var bl = BLOCKS[slot.id];
+    if (bl && bl.minTool) info = 'Requires tool (tier ' + bl.minTool + '+)';
+    else if (bl && bl.tool) info = 'Best tool: ' + bl.tool;
   }
   invTooltipEl.innerHTML = '';
   var nameDiv = document.createElement('div');
@@ -1616,6 +1687,27 @@ function lookDir(){
 function eyePos(){ return [player.x, player.y+EYE, player.z]; }
 var selectedBlock=null;
 var ORE_NAMES={}; ORE_NAMES[COAL]='Coal'; ORE_NAMES[IRON]='Iron'; ORE_NAMES[GOLD]='Gold'; ORE_NAMES[DIAM]='Diamond!';
+
+function getHeldTool(){
+  var slot=inv.slots[selIndex];
+  if(!slot||slot.type!=='item') return null;
+  var it=ITEMS[slot.id];
+  if(!it||!it.tool) return null;
+  return it;
+}
+function getMiningSpeed(blockId){
+  var tool=getHeldTool();
+  var block=BLOCKS[blockId];
+  if(!block) return 1;
+  var speed=1;
+  if(tool&&tool.tool===block.tool){
+    speed=tool.tier*2;
+  } else if(block.minTool){
+    speed=0.25;
+  }
+  return speed;
+}
+
 function doBreak(){
   var hit=raycast(eyePos(), lookDir(), REACH);
   if(!hit) return;
@@ -1624,7 +1716,10 @@ function doBreak(){
   if(id===OBSIDIAN||id===NPORTAL){ showMsg('Cannot break obsidian or portal blocks'); return; }
   setBlock(hit.x,hit.y,hit.z,AIR);
   sfxBreak(); swingHand();
-  invAdd('block', id, 1);
+  // Ore-specific drops
+  if(id===IRON) invAdd('item','Iron Ingot',1);
+  else if(id===DIAM) invAdd('item','Diamond',1);
+  else invAdd('block', id, 1);
   if(invOpen) buildInvGrid();
   if(ORE_NAMES[id]){ showMsg(ORE_NAMES[id]+' ore mined!'); hunger=Math.min(20,hunger+0.5); updateBars(); }
 }
@@ -2735,7 +2830,8 @@ function loop(){
                 mineProgress=0;
               }
               var hard=BLOCKS[hit.id]?BLOCKS[hit.id].hard:1;
-              mineProgress+=dt;
+              var speed=getMiningSpeed(hit.id);
+              mineProgress+=dt*speed;
               if(mineProgress>=hard){
                 doBreak();
                 mineTarget=null; mineProgress=0;
