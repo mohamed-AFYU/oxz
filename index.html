@@ -1503,14 +1503,17 @@ function buildChunkMesh(c){
       var corners=FACES[f].corners;
       var arr=transparent?tr:op;
       if(!transparent){
-        var ax=d[0], ay=d[1], az=d[2];
+        var t1x=0,t1y=0,t1z=0,t2x=0,t2y=0,t2z=0;
+        if(d[1]!==0){t1x=1;t2z=1;}
+        else if(d[0]!==0){t1y=1;t2z=1;}
+        else{t1x=1;t2y=1;}
         var ao=[0,0,0,0];
         for(var k=0;k<4;k++){
           var cn=corners[k];
           var vx2=ox+lx+cn[0], vy2=y+cn[1], vz2=oz+lz+cn[2];
-          var s1=isSolid(getBlock(vx2+ay, vy2, vz2+az))?1:0;
-          var s2=isSolid(getBlock(vx2+ax, vy2, vz2+az))?1:0;
-          var s3=isSolid(getBlock(vx2+ay, vy2+ay, vz2+az))?1:0;
+          var s1=isSolid(getBlock(vx2+t1x, vy2+t1y, vz2+t1z))?1:0;
+          var s2=isSolid(getBlock(vx2+t2x, vy2+t2y, vz2+t2z))?1:0;
+          var s3=isSolid(getBlock(vx2+t1x+t2x, vy2+t1y+t2y, vz2+t1z+t2z))?1:0;
           ao[k]=aoVal(s1,s2,s3);
         }
         var ai=[[0,1,2],[0,2,3]];
@@ -2189,7 +2192,8 @@ function updateParticles(dt){
     if(p.life<=0){ particles.splice(i,1); continue; }
     p.vy-=15*dt;
     p.x+=p.vx*dt; p.y+=p.vy*dt; p.z+=p.vz*dt;
-    p.vx*=0.95; p.vz*=0.95;
+    var drag=Math.pow(0.95,dt*60);
+    p.vx*=drag; p.vz*=drag;
   }
 }
 function renderParticles(){
