@@ -1,7 +1,7 @@
 {
   "task": "اعمل نظام تغيير الطقس ب زر معين واعمل 4 حالات للطقس\\",
   "max_cycles": 15,
-  "cycle": 0,
+  "cycle": 1,
   "status": "issues_found",
   "findings": [
     {
@@ -36,7 +36,15 @@
     }
   ],
   "history": [
-    {"agent": "build", "cycle": 0, "result": "completed"},
-    {"agent": "review", "cycle": 0, "result": "issues_found"}
+    {
+      "agent": "build",
+      "cycle": 0,
+      "result": "completed"
+    },
+    {
+      "agent": "review",
+      "cycle": 0,
+      "result": "issues_found"
+    }
   ]
 }
