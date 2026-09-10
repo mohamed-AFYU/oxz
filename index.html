@@ -269,6 +269,9 @@ var ITEMS = {
   'Gunpowder':   {name:'Gunpowder',   color:[0.3,0.3,0.3], maxStack:64, food:0},
   'Stick':       {name:'Stick',       color:[0.55,0.4,0.22],maxStack:64, food:0},
   'Torch':       {name:'Torch',       color:[1,0.85,0.3],  maxStack:64, food:0},
+  'Blaze Rod':   {name:'Blaze Rod',   color:[1,0.65,0.1],  maxStack:64, food:0},
+  'Magma Cream': {name:'Magma Cream', color:[0.9,0.4,0.1], maxStack:64, food:0},
+  'Gold Nugget': {name:'Gold Nugget', color:[0.96,0.84,0.26],maxStack:64, food:0},
 };
 
 // ---------- Inventory System ----------
@@ -1657,12 +1660,18 @@ var MOB_DEFS={
   zombie: {name:'Zombie', hp:20, spd:2.6, dmg:4, hostile:true, hw:0.35, hh:1.8, body:[0.25,0.5,0.3], head:[0.35,0.65,0.4], drop:['Rotten Flesh',1]},
   skeleton:{name:'Skeleton', hp:16, spd:3.0, dmg:3, hostile:true, hw:0.35, hh:1.8, body:[0.8,0.8,0.75], head:[0.9,0.9,0.85], drop:['Bone',1]},
   spider: {name:'Spider', hp:16, spd:3.6, dmg:3, hostile:true, hw:0.5, hh:0.9, body:[0.25,0.12,0.12], head:[0.35,0.15,0.15], drop:['String',1]},
-  creeper:{name:'Creeper', hp:20, spd:2.4, dmg:0, hostile:true, hw:0.35, hh:1.6, body:[0.25,0.7,0.25], head:[0.3,0.75,0.3], drop:['Gunpowder',0]}
+  creeper:{name:'Creeper', hp:20, spd:2.4, dmg:0, hostile:true, hw:0.35, hh:1.6, body:[0.25,0.7,0.25], head:[0.3,0.75,0.3], drop:['Gunpowder',0]},
+  zpig:{name:'Zombie Piglin', hp:20, spd:2.6, dmg:4, hostile:true, hw:0.35, hh:1.8, body:[0.75,0.55,0.35], head:[0.8,0.6,0.4], drop:['Rotten Flesh',1], nether:true},
+  ghast:{name:'Ghast', hp:10, spd:1.8, dmg:6, hostile:true, hw:0.7, hh:1.4, body:[0.9,0.9,0.95], head:[0.95,0.95,0.98], drop:['Gunpowder',0], nether:true, flying:true, ranged:true},
+  blaze:{name:'Blaze', hp:20, spd:2.0, dmg:4, hostile:true, hw:0.35, hh:1.6, body:[0.9,0.6,0.1], head:[1,0.75,0.2], drop:['Blaze Rod',0], nether:true},
+  'magma cube':{name:'Magma Cube', hp:16, spd:3.0, dmg:3, hostile:true, hw:0.4, hh:1.0, body:[0.8,0.3,0.05], head:[0.9,0.4,0.1], drop:['Magma Cream',0], nether:true, jumping:true}
 };
 var DROP_INFO={'Porkchop':{c:[1,0.55,0.6],nut:5},'Beef':{c:[0.6,0.3,0.2],nut:4},
   'Mutton':{c:[0.8,0.45,0.4],nut:3},'Feather':{c:[0.95,0.95,0.95],nut:1},
   'Rotten Flesh':{c:[0.5,0.6,0.4],nut:1},'Bone':{c:[0.9,0.9,0.85],nut:1},
-  'String':{c:[0.85,0.85,0.85],nut:1},'Gunpowder':{c:[0.3,0.3,0.3],nut:0}};
+  'String':{c:[0.85,0.85,0.85],nut:1},'Gunpowder':{c:[0.3,0.3,0.3],nut:0},
+  'Blaze Rod':{c:[1,0.65,0.1],nut:0},'Magma Cream':{c:[0.9,0.4,0.1],nut:0},
+  'Gold Nugget':{c:[0.96,0.84,0.26],nut:0}};
 var mobs=[], pickups=[], mobId=1;
 var spawnTimer=0;
 
@@ -1681,7 +1690,6 @@ function trySpawn(dt){
   spawnTimer-=dt;
   if(spawnTimer>0) return;
   spawnTimer=2.5;
-  if(currentDimension==='nether') return;
   var night = !(timeOfDay>0.25&&timeOfDay<0.75);
   // despawn far
   for(var i=mobs.length-1;i>=0;i--){
@@ -1696,6 +1704,12 @@ function trySpawn(dt){
   var bid=getBlock(Math.floor(sx),sy,Math.floor(sz));
   if(bid===WATER||bid===AIR) return;
   if(bid===CACTUS) return;
+  if(currentDimension==='nether'){
+    if(mobCount(true)>=12) return;
+    var table=['zpig','zpig','zpig','blaze','magma cube','magma cube','ghast'];
+    spawnMob(table[Math.floor(Math.random()*table.length)], sx, sy+1.01, sz);
+    return;
+  }
   var b=biomeAt(Math.floor(sx),Math.floor(sz)).biome;
   if(night){
     if(mobCount(true)>=10) return;
@@ -1780,7 +1794,7 @@ function updateMobs(dt){
     m.bob+=dt*8;
     var dx=player.x-m.x, dz=player.z-m.z;
     var dist=Math.hypot(dx,dz);
-    var hostile=d.hostile && (night || m.type==='spider' || dist<6);
+    var hostile=d.hostile && (night || m.type==='spider' || dist<6 || d.nether);
     var mvx=0, mvz=0, spd=d.spd;
     if(m.type==='creeper' && dist<3.2 && Math.abs(player.y-m.y)<3){
       if(m.fuse<0){ m.fuse=1.1; tone(800,0.3,'sine',0.2,1200); }
@@ -1801,6 +1815,12 @@ function updateMobs(dt){
         showMsg('Hit by '+d.name+'!');
       }
       spd*= (m.type==='spider'&&!night)?0.7:1;
+      // ranged attack for ghasts and blazes
+      if(d.ranged && m.atkCd<=0 && dist<20 && dist>4 && Math.abs(player.y-m.y)<5){
+        m.atkCd=2.5;
+        damage(d.dmg);
+        showMsg('Hit by '+d.name+' fireball!');
+      }
     } else {
       m.wanderT-=dt;
       if(m.wanderT<=0){ m.wanderT=2+Math.random()*4; m.yaw=Math.random()*Math.PI*2; }
@@ -1809,13 +1829,21 @@ function updateMobs(dt){
     }
     // in water: float + paddle
     var inW=getBlock(Math.floor(m.x),Math.floor(m.y+0.3),Math.floor(m.z))===WATER;
-    if(inW){ m.vy += (2.5-m.vy)*Math.min(1,6*dt); }
+    if(d.flying){
+      // flying mobs: float at target height, no gravity
+      var targetY=m.y+(Math.sin(m.bob*0.4)*0.5);
+      if(hostile && !dead && dist<20) targetY=player.y+3+Math.sin(m.bob*0.6)*2;
+      m.vy+=(targetY-m.y)*2*dt*3;
+      m.vy*=0.85;
+    } else if(inW){ m.vy += (2.5-m.vy)*Math.min(1,6*dt); }
     else { m.vy-=GRAVITY*dt; if(m.vy<-25)m.vy=-25; }
     var acc=Math.min(1,10*dt);
     m.vx+=(mvx-m.vx)*acc; m.vz+=(mvz-m.vz)*acc;
     var nxx=m.x+m.vx*dt;
     if(collideBox(nxx,m.y,m.z,d.hw,d.hh)){ nxx=m.x; m.vx=0;
-      if(m.onG&&m.jumpCd<=0&&(mvx||mvz)){ m.vy=7.6; m.jumpCd=0.5; } else m.yaw+=1.2*dt*3; }
+      if(m.onG&&m.jumpCd<=0&&(mvx||mvz)){
+        m.vy=d.jumping?11:7.6; m.jumpCd=d.jumping?0.4:0.5;
+      } else m.yaw+=1.2*dt*3; }
     m.x=nxx;
     var nyy=m.y+m.vy*dt;
     m.onG=false;
@@ -1827,7 +1855,9 @@ function updateMobs(dt){
     m.y=nyy;
     var nzz=m.z+m.vz*dt;
     if(collideBox(m.x,m.y,nzz,d.hw,d.hh)){ nzz=m.z; m.vz=0;
-      if(m.onG&&m.jumpCd<=0&&(mvx||mvz)){ m.vy=7.6; m.jumpCd=0.5; } else m.yaw+=1.2*dt*3; }
+      if(m.onG&&m.jumpCd<=0&&(mvx||mvz)){
+        m.vy=d.jumping?11:7.6; m.jumpCd=d.jumping?0.4:0.5;
+      } else m.yaw+=1.2*dt*3; }
     m.z=nzz;
     if(m.y<-12){ m.dead=true; mobs.splice(i,1); }
   }
@@ -1935,12 +1965,47 @@ function renderMobsEtc(){
     if(m.type==='chicken'){ pushBox(arr,m.x+lx,m.y+bobY,m.z+lz, bw,bw,bw*1.2, m.yaw, bodyC[0],bodyC[1],bodyC[2]); }
     else if(m.type==='spider'){ pushBox(arr,m.x+lx,m.y+bobY,m.z+lz, bw*1.6,bodyH,bw*1.4, m.yaw, bodyC[0],bodyC[1],bodyC[2]); }
     else if(m.type==='creeper'){ pushBox(arr,m.x+lx,m.y+bobY,m.z+lz, bw,bodyH+0.25,bw, m.yaw, bodyC[0],bodyC[1],bodyC[2]); }
+    else if(m.type==='ghast'){
+      // large floating body
+      pushBox(arr,m.x+lx,m.y+bobY,m.z+lz, bw*1.8,d.hh*0.7,bw*1.8, m.yaw, bodyC[0],bodyC[1],bodyC[2]);
+      // tentacles (4 small boxes below)
+      for(var t=0;t<4;t++){
+        var ta=t*Math.PI/2+0.3, tlen=bw*0.8;
+        var tx=m.x+lx+Math.cos(ta)*tlen*0.6, tz=m.z+lz+Math.sin(ta)*tlen*0.6;
+        pushBox(arr,tx,m.y+bobY-0.3,tz, 0.12,0.6,0.12, ta, bodyC[0]*0.85,bodyC[1]*0.85,bodyC[2]*0.85);
+      }
+    }
+    else if(m.type==='blaze'){
+      // body core
+      pushBox(arr,m.x+lx,m.y+bobY,m.z+lz, bw,bodyH,bw, m.yaw, bodyC[0],bodyC[1],bodyC[2]);
+      // floating fire rods (3 rotating rings)
+      for(var r=0;r<3;r++){
+        var ry=m.y+bobY+bodyH*(r/3);
+        for(var f=0;f<4;f++){
+          var fa=f*Math.PI/2+m.bob*1.5+r*0.5;
+          var fx=m.x+lx+Math.cos(fa)*bw*1.1, fz=m.z+lz+Math.sin(fa)*bw*1.1;
+          pushBox(arr,fx,ry,fz, 0.08,0.35,0.08, fa, bodyC[0]*1.1,bodyC[1]*0.9,bodyC[2]*0.5);
+        }
+      }
+    }
+    else if(m.type==='magma cube'){
+      // squished bouncing body
+      var squish=1.0+Math.abs(Math.sin(m.bob*2))*0.15;
+      pushBox(arr,m.x+lx,m.y+bobY,m.z+lz, bw*squish,bodyH*0.85/squish,bw*squish, m.yaw, bodyC[0],bodyC[1],bodyC[2]);
+    }
     else { pushBox(arr,m.x+lx,m.y+bobY,m.z+lz, bw,bodyH,bw*1.5, m.yaw, bodyC[0],bodyC[1],bodyC[2]); }
     var hy=m.y+bobY+bodyH+(m.type==='creeper'?0.25:0);
-    pushBox(arr,m.x+lx,hy,m.z+lz, headS,headS,headS, m.yaw, headC[0],headC[1],headC[2]);
-    // eyes (dark) on head front
-    var ex=-Math.sin(m.yaw)*headS*0.5, ez=-Math.cos(m.yaw)*headS*0.5;
-    pushBox(arr,m.x+lx+ex,hy+headS*0.55,m.z+lz+ez, headS*0.7,headS*0.18,0.03, m.yaw, 0.05,0.05,0.05);
+    if(m.type==='ghast'){
+      // ghast face on front of body
+      var fex=-Math.sin(m.yaw)*bw*0.9, fez=-Math.cos(m.yaw)*bw*0.9;
+      pushBox(arr,m.x+lx+fex*0.5,m.y+bobY+d.hh*0.45,m.z+lz+fez*0.5, headS*0.6,headS*0.4,0.03, m.yaw, headC[0],headC[1],headC[2]);
+      pushBox(arr,m.x+lx+fex*0.5,hy-0.15,m.z+lz+fez*0.5, headS*0.7,headS*0.18,0.03, m.yaw, 0.05,0.05,0.05);
+    } else {
+      pushBox(arr,m.x+lx,hy,m.z+lz, headS,headS,headS, m.yaw, headC[0],headC[1],headC[2]);
+      // eyes (dark) on head front
+      var ex=-Math.sin(m.yaw)*headS*0.5, ez=-Math.cos(m.yaw)*headS*0.5;
+      pushBox(arr,m.x+lx+ex,hy+headS*0.55,m.z+lz+ez, headS*0.7,headS*0.18,0.03, m.yaw, 0.05,0.05,0.05);
+    }
   }
   for(var p=0;p<pickups.length;p++){
     var it=pickups[p], di=DROP_INFO[it.kind]||{c:it.col||[1,1,1]};
