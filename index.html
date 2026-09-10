@@ -2065,11 +2065,13 @@ function renderMobsEtc(){
     else if(m.type==='spider'){
       pushBox(arr,m.x+lx,m.y+bobY,m.z+lz, bw*1.6,bodyH,bw*1.4, m.yaw, bodyC[0],bodyC[1],bodyC[2]);
       // Spider legs (8 total, 4 per side)
-      for(var leg=0;leg<4;leg++){
-        var legAng=m.yaw+(leg<2?-0.8:0.8)+Math.sin(t*6+leg*1.5)*0.3;
-        var legLen=0.5+leg*0.1;
-        var legX=m.x+lx+Math.sin(legAng)*legLen*(leg%2===0?1:-1)*bw;
-        var legZ=m.z+lz+Math.cos(legAng)*legLen*(leg%2===0?1:-1)*bw;
+      for(var leg=0;leg<8;leg++){
+        var side=leg<4?-1:1;
+        var legIdx=leg%4;
+        var legAng=m.yaw+side*0.8+Math.sin(t*6+leg*1.5)*0.3;
+        var legLen=0.5+legIdx*0.1;
+        var legX=m.x+lx+Math.sin(legAng)*legLen*(legIdx%2===0?1:-1)*bw;
+        var legZ=m.z+lz+Math.cos(legAng)*legLen*(legIdx%2===0?1:-1)*bw;
         pushBox(arr,legX,m.y-0.1+bobY*0.5,legZ, 0.06,0.3,0.06, 0, bodyC[0]*0.6,bodyC[1]*0.6,bodyC[2]*0.6);
       }
     }
@@ -2144,13 +2146,6 @@ function renderMobsEtc(){
         pushBox(arr,m.x+lx+lOffX,m.y-0.05+bobY*0.3,m.z+lz+lOffZ, legW,legH,legW, m.yaw+legA, bodyC[0]*0.85,bodyC[1]*0.85,bodyC[2]*0.85);
       }
     }
-    // Eyes for remaining mobs (pig, cow, sheep)
-    if(m.type!=='chicken'&&m.type!=='spider'&&m.type!=='creeper'&&m.type!=='zombie'&&m.type!=='skeleton'){
-      var hy3=m.y+bobY+bodyH;
-      var ex3=-Math.sin(m.yaw)*headS*0.5, ez3=-Math.cos(m.yaw)*headS*0.5;
-      pushBox(arr,m.x+lx+ex3-ex3*0.3,hy3+headS*0.55,m.z+lz+ez3-ez3*0.3, headS*0.18,headS*0.1,0.03, m.yaw, 0.05,0.05,0.05);
-      pushBox(arr,m.x+lx+ex3+ex3*0.3,hy3+headS*0.55,m.z+lz+ez3+ez3*0.3, headS*0.18,headS*0.1,0.03, m.yaw, 0.05,0.05,0.05);
-    }
   }
   for(var p=0;p<pickups.length;p++){
     var it=pickups[p], di=DROP_INFO[it.kind]||{c:it.col||[1,1,1]};
@@ -2204,20 +2199,24 @@ function renderParticles(){
     var p=particles[i];
     var alpha=p.life/p.maxLife;
     var s=p.size*alpha;
-    arr.push(p.x-s,p.y-s,p.z, p.x+s,p.y-s,p.z, p.x+s,p.y+s,p.z);
-    arr.push(p.x-s,p.y-s,p.z, p.x+s,p.y+s,p.z, p.x-s,p.y+s,p.z);
+    var cr=p.r*alpha, cg=p.g*alpha, cb=p.b*alpha;
+    arr.push(p.x-s,p.y-s,p.z, cr,cg,cb, p.x+s,p.y-s,p.z, cr,cg,cb, p.x+s,p.y+s,p.z, cr,cg,cb);
+    arr.push(p.x-s,p.y-s,p.z, cr,cg,cb, p.x+s,p.y+s,p.z, cr,cg,cb, p.x-s,p.y+s,p.z, cr,cg,cb);
   }
-  gl.useProgram(progF);
-  gl.uniformMatrix4fv(uProjF,false,projMat);
-  gl.uniformMatrix4fv(uViewF,false,viewMat);
+  gl.useProgram(progM);
+  gl.uniformMatrix4fv(uProjM,false,projMat);
+  gl.uniformMatrix4fv(uViewM,false,viewMat);
+  gl.uniform3f(uFogM,fogColor[0],fogColor[1],fogColor[2]);
+  gl.uniform1f(uFogNearM,26); gl.uniform1f(uFogFarM,80);
+  gl.uniform1f(uSunM,sunLevel);
   gl.disable(gl.CULL_FACE);
   gl.depthMask(false);
   gl.bindBuffer(gl.ARRAY_BUFFER,particleVBO);
   gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(arr),gl.DYNAMIC_DRAW);
-  gl.enableVertexAttribArray(aPosF);
-  gl.vertexAttribPointer(aPosF,3,gl.FLOAT,false,0,0);
-  gl.uniform4f(uColF,0.7,0.6,0.4,0.7);
-  gl.drawArrays(gl.TRIANGLES,0,arr.length/3);
+  gl.enableVertexAttribArray(aPosM); gl.enableVertexAttribArray(aColM);
+  gl.vertexAttribPointer(aPosM,3,gl.FLOAT,false,24,0);
+  gl.vertexAttribPointer(aColM,3,gl.FLOAT,false,24,12);
+  gl.drawArrays(gl.TRIANGLES,0,arr.length/6);
   gl.depthMask(true);
   gl.enable(gl.CULL_FACE);
 }
@@ -2487,15 +2486,23 @@ function render(){
           var starY=cy2+Math.sin(starElev)*starDist;
           var starZ=cz2+Math.sin(starAng)*Math.cos(starElev)*starDist;
           var twinkle=0.5+0.5*Math.sin(perfTime*2+si3*1.7);
-          starV.push(starX,starY,starZ);
-          starV.push(starX+0.3,starY+0.3,starZ);
-          starV.push(starX+0.3,starY-0.3,starZ);
+          var sb=nightness2*0.7*twinkle;
+          starV.push(starX,starY,starZ, sb,sb,sb);
+          starV.push(starX+0.3,starY+0.3,starZ, sb,sb,sb);
+          starV.push(starX+0.3,starY-0.3,starZ, sb,sb,sb);
         }
+        gl.useProgram(progM);
+        gl.uniformMatrix4fv(uProjM,false,projMat);
+        gl.uniformMatrix4fv(uViewM,false,viewMat);
+        gl.uniform3f(uFogM,fogColor[0],fogColor[1],fogColor[2]);
+        gl.uniform1f(uFogNearM,26); gl.uniform1f(uFogFarM,80);
+        gl.uniform1f(uSunM,1.0);
         gl.bindBuffer(gl.ARRAY_BUFFER,selVBO);
         gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(starV),gl.DYNAMIC_DRAW);
-        gl.vertexAttribPointer(aPosF,3,gl.FLOAT,false,0,0);
-        gl.uniform4f(uColF,1,1,1,nightness2*0.7);
-        gl.drawArrays(gl.TRIANGLES,0,starV.length/3);
+        gl.enableVertexAttribArray(aPosM); gl.enableVertexAttribArray(aColM);
+        gl.vertexAttribPointer(aPosM,3,gl.FLOAT,false,24,0);
+        gl.vertexAttribPointer(aColM,3,gl.FLOAT,false,24,12);
+        gl.drawArrays(gl.TRIANGLES,0,starV.length/6);
       }
     }
 
