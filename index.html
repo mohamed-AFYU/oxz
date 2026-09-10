@@ -1985,8 +1985,8 @@ function renderWeather(){
   var rain=weather.type==='rain';
   for(var i=0;i<drops.length;i++){
     var d=drops[i];
-    d.y-=(rain?22:2.2)*0.016;
-    d.x+=(rain?-2:Math.sin(perfTime+i)*0.5)*0.016;
+    d.y-=(rain?22:2.2)*renderDt;
+    d.x+=(rain?-2:Math.sin(perfTime+i)*0.5)*renderDt;
     if(d.y<player.y-2) resetDrop(d,false);
     if(Math.abs(d.x-player.x)>15||Math.abs(d.z-player.z)>15) resetDrop(d,false);
     if(rain) arr.push(d.x,d.y,d.z, d.x+0.08,d.y+0.9,d.z);
@@ -2069,7 +2069,7 @@ function render(){
     var verts=[];
     for(var k=0;k<clouds.length;k++){
       var cl=clouds[k];
-      cl.ox+=cl.s*0.016; if(cl.ox>90)cl.ox=-90;
+      cl.ox+=cl.s*renderDt; if(cl.ox>90)cl.ox=-90;
       var wx=player.x+cl.ox, wz=player.z+cl.oz, y=56;
       verts.push(wx,y,wz, wx+cl.w,y,wz, wx+cl.w,y,wz+cl.d);
       verts.push(wx,y,wz, wx+cl.w,y,wz+cl.d, wx,y,wz+cl.d);
@@ -2605,13 +2605,14 @@ function findSpawn(){
 }
 
 // ---------- Main loop ----------
-var lastT=performance.now(), perfTime=0, fpsFrames=0, fpsTime=0;
+var lastT=performance.now(), perfTime=0, fpsFrames=0, fpsTime=0, renderDt=0;
 var fpsEl=document.getElementById('fps'), coordsEl=document.getElementById('coords');
 function loop(){
   requestAnimationFrame(loop);
   var now=performance.now();
   var dt=(now-lastT)/1000; lastT=now;
   if(dt>0.1)dt=0.1;
+  renderDt=dt;
   if(playing){
     updateStreaming(false);
     processQueues();
