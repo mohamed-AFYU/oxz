@@ -1,7 +1,7 @@
 {
   "task": "اعمل نظام تغيير الطقس ب زر معين واعمل 4 حالات للطقس\\",
   "max_cycles": 15,
-  "cycle": 1,
+  "cycle": 2,
   "status": "issues_found",
   "findings": [
     {
